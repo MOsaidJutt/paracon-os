@@ -29,6 +29,9 @@ model Organisation {
   auditLogs           AuditLog[]
   invites             Invite[]
   configs             Config[]
+  clients             Client[]
+  suppliers           Supplier[]
+  tenders             Tender[]
 }
 
 // ─── Identity & Access ────────────────────────────────────────────────────────
@@ -206,6 +209,106 @@ model Config {
 
   @@unique([organisationId, key])
   @@index([key])
+}
+
+// ─── Tender Pipeline ──────────────────────────────────────────────────────────
+// Status/outcome/winProbabilityText/bidDecision/intent are free-text columns
+// validated at the Zod layer against the Config registry (tender.statusList,
+// tender.outcomeList, tender.winProbWeights, etc.) rather than Prisma enums,
+// so an admin can add/rename options without a migration (CONFIG NOT CODE).
+
+model Client {
+  id             String       @id @default(cuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  name           String
+  address        String?
+  status         String       @default("Pricing")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  contacts ClientContact[]
+  tenders  Tender[]
+
+  @@unique([organisationId, name])
+  @@index([organisationId])
+}
+
+model ClientContact {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name      String
+  position  String?
+  email     String?
+  phone     String?
+  mobile    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenders Tender[]
+
+  @@unique([clientId, name])
+  @@index([clientId])
+}
+
+model Supplier {
+  id             String       @id @default(cuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  trade          String
+  company        String
+  contact        String?
+  email          String?
+  phone          String?
+  comments       String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organisationId, company, contact])
+  @@index([organisationId, trade])
+}
+
+model Tender {
+  id                    String         @id @default(cuid())
+  organisationId        String
+  organisation          Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  projectName           String
+  address               String?
+  status                String
+  received              DateTime?
+  due                   DateTime?
+  submitted             DateTime?
+  value                 Float          @default(0)
+  clientId              String
+  client                Client         @relation(fields: [clientId], references: [id])
+  contactId             String?
+  contact               ClientContact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  winProbabilityText    String
+  winProbabilityNumeric Float          @default(0)
+  bidDecision           String
+  intent                String
+  reason                String?
+  outcome               String?
+  winningBid            Float?
+  winningCo             String?
+  priceDeltaPct         Float?
+  valueBand             String
+  year                  Int
+  quarter               String
+  marginPct             Float?
+  tenderDurationDays    Int?
+  expectedStart         DateTime?
+  expectedEnd           DateTime?
+  expectedLabour        Json?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  @@unique([organisationId, projectName, clientId])
+  @@index([organisationId, status])
+  @@index([organisationId, clientId])
+  @@index([organisationId, due])
+  @@index([organisationId, outcome])
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────
