@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// TEMPORARY: swapped to sqlite for a local client demo with zero external setup.
+// Swap back to postgresql + DATABASE_URL_UNPOOLED before continuing real development.
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Tenancy ──────────────────────────────────────────────────────────────────
+
+model Organisation {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  logoUrl      String?
+  primaryColor String?  @default("#B08D57")
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users               User[]
+  roles               Role[]
+  aiSettings          AiSetting[]
+  aiUsageLogs         AiUsageLog[]
+  organisationModules OrganisationModule[]
+  auditLogs           AuditLog[]
+}
+
+// ─── Identity & Access ────────────────────────────────────────────────────────
+
+model User {
+  id             String       @id @default(cuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  email          String
+  name           String
+  hashedPassword String
+  roleId         String
+  role           Role         @relation(fields: [roleId], references: [id])
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  auditLogs AuditLog[]
+
+  @@unique([organisationId, email])
+  @@index([roleId])
+}
+
+model Role {
+  id             String        @id @default(cuid())
+  organisationId String?
+  organisation   Organisation? @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  name           String
+  slug           String
+  isSystem       Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  users           User[]
+  rolePermissions RolePermission[]
+
+  @@unique([organisationId, slug])
+}
+
+model Permission {
+  id          String @id @default(cuid())
+  slug        String @unique
+  group       String
+  label       String
+  description String @default("")
+
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+// ─── AI Configuration ─────────────────────────────────────────────────────────
+
+enum AiScope {
+  GLOBAL
+  ORG
+  FEATURE
+}
+
+model AiSetting {
+  id                 String       @id @default(cuid())
+  scope              AiScope      @default(GLOBAL)
+  organisationId     String?
+  organisation       Organisation? @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  feature            String?
+  provider           String       @default("openai")
+  model              String       @default("gpt-4o-mini")
+  apiKeyEncrypted    String
+  baseUrl            String?
+  temperature        Float        @default(0.7)
+  maxTokens          Int          @default(2000)
+  enabled            Boolean      @default(true)
+  monthlySpendCapUsd Float?
+  updatedBy          String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@index([organisationId])
+  @@index([scope, organisationId, feature])
+}
+
+model AiUsageLog {
+  id                String       @id @default(cuid())
+  organisationId    String?
+  organisation      Organisation? @relation(fields: [organisationId], references: [id], onDelete: SetNull)
+  feature           String
+  provider          String
+  model             String
+  promptTokens      Int          @default(0)
+  completionTokens  Int          @default(0)
+  costEstimateUsd   Float        @default(0)
+  latencyMs         Int          @default(0)
+  success           Boolean      @default(true)
+  error             String?
+  createdAt         DateTime     @default(now())
+
+  @@index([organisationId])
+  @@index([createdAt])
+}
+
+// ─── Modules / Feature Flags ─────────────────────────────────────────────────
+
+model Module {
+  id               String  @id @default(cuid())
+  slug             String  @unique
+  label            String
+  description      String  @default("")
+  enabledByDefault Boolean @default(true)
+  isSystem         Boolean @default(false)
+  sortOrder        Int     @default(0)
+
+  organisationModules OrganisationModule[]
+}
+
+model OrganisationModule {
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  moduleId       String
+  module         Module       @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  enabled        Boolean      @default(true)
+
+  @@id([organisationId, moduleId])
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  organisationId String?
+  organisation   Organisation? @relation(fields: [organisationId], references: [id], onDelete: SetNull)
+  userId         String?
+  user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action         String
+  entityType     String
+  entityId       String?
+  before         Json?
+  after          Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime     @default(now())
+
+  @@index([organisationId])
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
