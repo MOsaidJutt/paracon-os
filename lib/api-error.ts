@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { ForbiddenError, UnauthorisedError } from "./errors";
+import { ForbiddenError, NotFoundError, UnauthorisedError } from "./errors";
 
 /** Maps a thrown error to the correct HTTP response per the API security rules. */
 export function toErrorResponse(error: unknown): NextResponse {
@@ -9,6 +9,9 @@ export function toErrorResponse(error: unknown): NextResponse {
   }
   if (error instanceof ForbiddenError) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (error instanceof NotFoundError) {
+    return NextResponse.json({ error: error.message }, { status: 404 });
   }
   if (error instanceof ZodError) {
     return NextResponse.json(

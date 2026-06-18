@@ -22,16 +22,24 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AiSettingFormDialog, type AiSettingRow } from "./ai-setting-form-dialog";
 
-export function AiSettingsTable() {
+export function AiSettingsTable({
+  apiBase = "/api/admin/ai-settings",
+  queryKey = ["admin", "ai-settings"],
+  lockScope,
+}: {
+  apiBase?: string;
+  queryKey?: string[];
+  lockScope?: "GLOBAL";
+}) {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AiSettingRow | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["admin", "ai-settings"],
+    queryKey,
     queryFn: async () => {
-      const res = await fetch("/api/admin/ai-settings");
+      const res = await fetch(apiBase);
       if (!res.ok) throw new Error("Failed to load AI settings");
       return (await res.json()) as { settings: AiSettingRow[] };
     },
@@ -39,7 +47,7 @@ export function AiSettingsTable() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/admin/ai-settings/${id}`, { method: "DELETE" });
+      const res = await fetch(`${apiBase}/${id}`, { method: "DELETE" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? "Failed to delete");
@@ -47,7 +55,7 @@ export function AiSettingsTable() {
     },
     onSuccess: () => {
       toast.success("AI setting deleted");
-      queryClient.invalidateQueries({ queryKey: ["admin", "ai-settings"] });
+      queryClient.invalidateQueries({ queryKey });
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -55,7 +63,7 @@ export function AiSettingsTable() {
   async function handleTest(id: string) {
     setTestingId(id);
     try {
-      const res = await fetch(`/api/admin/ai-settings/${id}/test`, { method: "POST" });
+      const res = await fetch(`${apiBase}/${id}/test`, { method: "POST" });
       const body = await res.json();
       if (!res.ok || !body.ok) {
         toast.error(body.error ?? "Connection test failed");
@@ -88,7 +96,7 @@ export function AiSettingsTable() {
         </Button>
       </div>
 
-      <div className="rounded-lg border border-border">
+      <div className="overflow-x-auto rounded-lg border border-border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -104,6 +112,13 @@ export function AiSettingsTable() {
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">
                   Loading...
+                </TableCell>
+              </TableRow>
+            )}
+            {!isLoading && data?.settings.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  No org or feature-level AI settings yet — features fall back to the platform default.
                 </TableCell>
               </TableRow>
             )}
@@ -175,7 +190,14 @@ export function AiSettingsTable() {
         </Table>
       </div>
 
-      <AiSettingFormDialog open={dialogOpen} onOpenChange={setDialogOpen} setting={editing} />
+      <AiSettingFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        setting={editing}
+        apiBase={apiBase}
+        queryKey={queryKey}
+        lockScope={lockScope}
+      />
     </div>
   );
 }

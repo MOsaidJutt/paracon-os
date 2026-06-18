@@ -2,78 +2,9 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { encrypt } from "../lib/crypto";
 import { PERMISSION_GROUPS } from "../lib/permissions";
+import { PERMISSION_LABELS, ROLE_DEFINITIONS, MODULES, CONFIG_DEFAULTS } from "../lib/seed-data";
 
 const prisma = new PrismaClient();
-
-const PERMISSION_LABELS: Record<string, string> = {
-  "tender.view": "View tenders",
-  "tender.edit": "Edit tenders",
-  "project.view": "View projects",
-  "project.edit": "Edit projects",
-  "program.edit": "Edit construction program",
-  "labour.view": "View labour intelligence",
-  "worker.edit": "Edit worker records",
-  "compliance.manage": "Manage compliance documents",
-  "allocation.edit": "Edit resource allocation",
-  "site.update": "Submit site daily updates",
-  "dashboard.director": "View Director dashboard",
-  "dashboard.pm": "View PM dashboard",
-  "admin.users": "Manage users",
-  "admin.roles": "Manage roles & permissions",
-  "admin.ai": "Manage AI settings",
-  "admin.billing": "Manage billing",
-  "admin.modules": "Manage modules",
-  "admin.branding": "Manage branding",
-  "ai.assistant.use": "Use AI assistant",
-  "platform.superadmin": "Super admin (all tenants)",
-};
-
-const ROLE_DEFINITIONS = [
-  {
-    slug: "director",
-    name: "Director",
-    permissions: [
-      ...PERMISSION_GROUPS.admin,
-      ...PERMISSION_GROUPS.tender,
-      ...PERMISSION_GROUPS.project,
-      ...PERMISSION_GROUPS.program,
-      ...PERMISSION_GROUPS.labour,
-      ...PERMISSION_GROUPS.compliance,
-      ...PERMISSION_GROUPS.allocation,
-      ...PERMISSION_GROUPS.dashboard,
-      ...PERMISSION_GROUPS.ai,
-    ],
-  },
-  {
-    slug: "project-manager",
-    name: "Project Manager",
-    permissions: [
-      "project.view",
-      "project.edit",
-      "program.edit",
-      "labour.view",
-      "worker.edit",
-      "allocation.edit",
-      "dashboard.pm",
-      "ai.assistant.use",
-    ],
-  },
-  {
-    slug: "site-foreman",
-    name: "Site Foreman",
-    permissions: ["site.update"],
-  },
-  {
-    slug: "estimator",
-    name: "Estimator",
-    permissions: ["tender.view", "tender.edit", "ai.assistant.use"],
-  },
-  {
-    slug: "viewer",
-    name: "Viewer",
-    permissions: ["project.view", "tender.view", "dashboard.pm"],
-  },
-] as const;
 
 const DEMO_USERS = [
   { email: "director@paracon.com.au", name: "Avery Director", roleSlug: "director" },
@@ -84,17 +15,19 @@ const DEMO_USERS = [
 
 const DEMO_PASSWORD = "Demo1234!";
 
-const MODULES = [
-  { slug: "tender", label: "Tender Pipeline", description: "Tender register and pipeline KPIs" },
-  { slug: "projects", label: "Projects & Program", description: "Project register and construction program" },
-  { slug: "labour", label: "Labour Intelligence", description: "Worker database and skills matrix" },
-  { slug: "forecast", label: "Forecast & Capacity", description: "Labour demand/supply forecast engine" },
-  { slug: "allocation", label: "Resource Allocation", description: "Worker allocation planner" },
-  { slug: "site-updates", label: "Site Daily Updates", description: "Foreman mobile daily update flow" },
-  { slug: "productivity", label: "Productivity & Estimating", description: "Productivity DB and estimating feedback loop" },
-] as const;
+const SUPER_ADMIN_EMAIL = "superadmin@paracon-os.com";
 
 async function main() {
+  console.log("Seeding permissions...");
+  for (const slug of Object.values(PERMISSION_GROUPS).flat()) {
+    const group = slug.split(".")[0];
+    await prisma.permission.upsert({
+      where: { slug },
+      update: {},
+      create: { slug, group, label: PERMISSION_LABELS[slug] ?? slug },
+    });
+  }
+
   console.log("Seeding Paracon Group...");
 
   const org = await prisma.organisation.upsert({
@@ -106,20 +39,6 @@ async function main() {
       primaryColor: "#B08D57",
     },
   });
-
-  // Permissions
-  for (const slug of Object.values(PERMISSION_GROUPS).flat()) {
-    const group = slug.split(".")[0];
-    await prisma.permission.upsert({
-      where: { slug },
-      update: {},
-      create: {
-        slug,
-        group,
-        label: PERMISSION_LABELS[slug] ?? slug,
-      },
-    });
-  }
 
   // Roles + RolePermission
   const roleIdBySlug = new Map<string, string>();
@@ -167,15 +86,15 @@ async function main() {
 
   // Modules + per-org toggle
   for (const mod of MODULES) {
-    const module = await prisma.module.upsert({
+    const moduleRow = await prisma.module.upsert({
       where: { slug: mod.slug },
       update: { label: mod.label, description: mod.description },
       create: { ...mod, isSystem: true },
     });
     await prisma.organisationModule.upsert({
-      where: { organisationId_moduleId: { organisationId: org.id, moduleId: module.id } },
+      where: { organisationId_moduleId: { organisationId: org.id, moduleId: moduleRow.id } },
       update: { enabled: true },
-      create: { organisationId: org.id, moduleId: module.id, enabled: true },
+      create: { organisationId: org.id, moduleId: moduleRow.id, enabled: true },
     });
   }
 
@@ -201,9 +120,86 @@ async function main() {
     }
   }
 
+  // Settings registry — platform defaults (organisationId: null). Unique constraint on
+  // (organisationId, key) doesn't hold for null organisationId in SQL, so upsert-by-find
+  // rather than relying on Prisma's compound-unique upsert.
+  console.log("Seeding Config registry defaults...");
+  for (const def of CONFIG_DEFAULTS) {
+    const existing = await prisma.config.findFirst({ where: { organisationId: null, key: def.key } });
+    if (existing) {
+      await prisma.config.update({
+        where: { id: existing.id },
+        data: {
+          group: def.group,
+          type: def.type,
+          label: def.label,
+          description: def.description,
+          valueJson: def.valueJson,
+        },
+      });
+    } else {
+      await prisma.config.create({
+        data: {
+          organisationId: null,
+          key: def.key,
+          group: def.group,
+          type: def.type,
+          label: def.label,
+          description: def.description,
+          valueJson: def.valueJson,
+          isSystem: true,
+        },
+      });
+    }
+  }
+
+  // Platform org — hosts the Super Admin account, kept separate from any
+  // tenant so "which org does this user belong to" never gets ambiguous
+  // for someone with cross-tenant (platform.superadmin) access.
+  console.log("Seeding Platform org + Super Admin...");
+
+  const platformOrg = await prisma.organisation.upsert({
+    where: { slug: "platform" },
+    update: {},
+    create: { name: "Paracon OS Platform", slug: "platform" },
+  });
+
+  const superAdminRole = await prisma.role.upsert({
+    where: { organisationId_slug: { organisationId: platformOrg.id, slug: "super-admin" } },
+    update: {},
+    create: {
+      organisationId: platformOrg.id,
+      name: "Super Admin",
+      slug: "super-admin",
+      isSystem: true,
+    },
+  });
+
+  const superAdminPermission = await prisma.permission.findUniqueOrThrow({
+    where: { slug: "platform.superadmin" },
+  });
+  await prisma.rolePermission.upsert({
+    where: { roleId_permissionId: { roleId: superAdminRole.id, permissionId: superAdminPermission.id } },
+    update: {},
+    create: { roleId: superAdminRole.id, permissionId: superAdminPermission.id },
+  });
+
+  await prisma.user.upsert({
+    where: { organisationId_email: { organisationId: platformOrg.id, email: SUPER_ADMIN_EMAIL } },
+    update: { roleId: superAdminRole.id },
+    create: {
+      organisationId: platformOrg.id,
+      email: SUPER_ADMIN_EMAIL,
+      name: "Platform Super Admin",
+      hashedPassword,
+      roleId: superAdminRole.id,
+    },
+  });
+
   console.log("Seed complete.");
   console.log("Demo logins (password: %s):", DEMO_PASSWORD);
   for (const user of DEMO_USERS) console.log(`  ${user.email} (${user.roleSlug})`);
+  console.log(`  ${SUPER_ADMIN_EMAIL} (super-admin)`);
 }
 
 main()

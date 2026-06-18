@@ -1,7 +1,10 @@
 # Paracon OS
 
 Multi-tenant, AI-integrated construction operating system for Paracon Group ("Build in Parallel").
-Phase 0: foundation, auth/RBAC, tenant scoping, app shell, and an AI Settings admin screen.
+Phase 1: hardened multi-tenancy/auth/RBAC, full Roles & Permissions and invite-by-email, a
+Super Admin area (orgs, AI defaults, settings, audit, impersonation), Modules wiring, AI usage
+viewer, org branding (R2 logo + accent guardrail), an audit log viewer, and the Config settings
+registry.
 
 ## Stack
 
@@ -37,6 +40,10 @@ Next.js 14 (App Router) + TypeScript, Tailwind + shadcn/ui, Prisma + PostgreSQL 
    - `NEXTAUTH_SECRET` — `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
    - `ENCRYPTION_KEY` — `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
    - `OPENAI_API_KEY` — used to seed the GLOBAL AI setting so the "Test Connection" button works out of the box.
+   - `RESEND_API_KEY` / `EMAIL_FROM` — optional; without a key, invite emails log their link to the
+     console instead of sending, so the invite flow still works locally.
+   - `APP_URL` — used to build accept-invite links (defaults to `http://localhost:3000`).
+   - `R2_*` — optional; without them, org logo upload will fail (branding accent swatches still work).
 
 3. **Push the schema and seed demo data**
 
@@ -45,7 +52,8 @@ Next.js 14 (App Router) + TypeScript, Tailwind + shadcn/ui, Prisma + PostgreSQL 
    npm run db:seed
    ```
 
-   Seeds one organisation (Paracon Group) with four demo logins, all password `Demo1234!`:
+   Seeds Paracon Group with four demo logins, plus a separate Platform org holding the Super Admin
+   account — all password `Demo1234!`:
 
    | Email | Role |
    |---|---|
@@ -53,6 +61,7 @@ Next.js 14 (App Router) + TypeScript, Tailwind + shadcn/ui, Prisma + PostgreSQL 
    | pm@paracon.com.au | Project Manager |
    | foreman@paracon.com.au | Site Foreman |
    | estimator@paracon.com.au | Estimator |
+   | superadmin@paracon-os.com | Super Admin (platform-wide, separate org) |
 
 4. **Run the app**
 
@@ -91,9 +100,11 @@ ngrok http 3000
 Share the HTTPS URL it gives you, along with the demo logins above. Set `NEXTAUTH_URL` to the
 ngrok URL before starting the server if cookies misbehave across the tunnel.
 
-## Known Phase 0 limitations
+## Known limitations
 
-- Roles & Permissions, Modules, Branding and Billing admin screens are stubs — wired up in later phases.
-- Org logo upload (Cloudflare R2) isn't built yet; the topbar falls back to the static Paracon wordmark.
-- JWT sessions cache permissions at sign-in time — a role's permissions changing mid-session
-  requires the user to sign out/in to pick up the change (acceptable for Phase 0; revisit in Phase 1).
+- Billing remains a stub — wired up in a later phase.
+- Modules (Tender, Projects, Labour, Forecast, Allocation, Site Updates, Productivity) have no
+  real pages yet — `lib/modules.ts`'s `requireModuleEnabled()` is the hook point Phase 2+ route
+  groups call into; there's nothing to gate today.
+- The in-memory rate limiter (`lib/rate-limit.ts`) is single-instance only — graduate to a shared
+  store (Upstash/Redis) before multi-instance production.

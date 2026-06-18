@@ -6,9 +6,11 @@ import { auditLog } from "@/lib/audit";
 import { toErrorResponse } from "@/lib/api-error";
 import { updateAiSettingSchema } from "@/lib/validations/ai-setting";
 
+// Org admins can only reach their own ORG/FEATURE rows — GLOBAL is
+// super-admin-only, see /api/super-admin/ai-defaults.
 async function findScopedSetting(id: string, organisationId: string) {
   return prisma.aiSetting.findFirst({
-    where: { id, OR: [{ scope: "GLOBAL" }, { organisationId }] },
+    where: { id, organisationId, scope: { in: ["ORG", "FEATURE"] } },
   });
 }
 

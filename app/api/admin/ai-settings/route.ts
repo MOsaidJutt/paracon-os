@@ -6,12 +6,17 @@ import { auditLog } from "@/lib/audit";
 import { toErrorResponse } from "@/lib/api-error";
 import { createAiSettingSchema } from "@/lib/validations/ai-setting";
 
+// Org admins (admin.ai) only ever see/manage their own ORG/FEATURE rows here.
+// The platform-wide GLOBAL row is managed exclusively under
+// /api/super-admin/ai-defaults by platform.superadmin — letting any org
+// admin touch GLOBAL would let them change the AI provider/key for every
+// tenant on the platform.
 export async function GET() {
   try {
     const session = await requirePermission("admin.ai");
 
     const settings = await prisma.aiSetting.findMany({
-      where: { OR: [{ scope: "GLOBAL" }, { organisationId: session.user.organisationId }] },
+      where: { organisationId: session.user.organisationId, scope: { in: ["ORG", "FEATURE"] } },
       orderBy: [{ scope: "asc" }, { createdAt: "asc" }],
     });
 
@@ -28,7 +33,14 @@ export async function POST(req: NextRequest) {
     const session = await requirePermission("admin.ai");
     const body = createAiSettingSchema.parse(await req.json());
 
-    const organisationId = body.scope === "GLOBAL" ? null : session.user.organisationId;
+    if (body.scope === "GLOBAL") {
+      return NextResponse.json(
+        { error: "GLOBAL settings are managed by a super admin" },
+        { status: 403 }
+      );
+    }
+
+    const organisationId = session.user.organisationId;
     const feature = body.scope === "FEATURE" ? body.feature ?? null : null;
 
     if (body.scope === "FEATURE" && !feature) {

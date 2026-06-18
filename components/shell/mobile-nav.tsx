@@ -15,7 +15,7 @@ export function MobileNav({ permissions }: { permissions: string[] }) {
       <Button
         variant="ghost"
         size="icon"
-        className="size-12 lg:hidden"
+        className="size-12 shrink-0 lg:hidden"
         aria-label="Open navigation"
         onClick={() => setOpen(true)}
       >

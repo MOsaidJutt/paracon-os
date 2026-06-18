@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { MoreHorizontal, Plus, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { UserFormDialog } from "./user-form-dialog";
+import { InviteUserDialog } from "./invite-user-dialog";
 
 type RoleOption = { id: string; name: string; slug: string };
 type UserRow = {
@@ -34,6 +35,7 @@ type UserRow = {
 export function UsersTable() {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserRow | null>(null);
 
   const { data, isLoading } = useQuery({
@@ -67,19 +69,25 @@ export function UsersTable() {
         <p className="text-sm text-muted-foreground">
           {data?.users.length ?? 0} user{data?.users.length === 1 ? "" : "s"}
         </p>
-        <Button
-          size="sm"
-          onClick={() => {
-            setEditingUser(null);
-            setDialogOpen(true);
-          }}
-        >
-          <Plus className="size-4" />
-          Add user
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => setInviteOpen(true)}>
+            <UserPlus className="size-4" />
+            Invite user
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              setEditingUser(null);
+              setDialogOpen(true);
+            }}
+          >
+            <Plus className="size-4" />
+            Add user
+          </Button>
+        </div>
       </div>
 
-      <div className="rounded-lg border border-border">
+      <div className="overflow-x-auto rounded-lg border border-border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -154,6 +162,7 @@ export function UsersTable() {
       </div>
 
       <UserFormDialog open={dialogOpen} onOpenChange={setDialogOpen} user={editingUser} />
+      <InviteUserDialog open={inviteOpen} onOpenChange={setInviteOpen} />
     </div>
   );
 }

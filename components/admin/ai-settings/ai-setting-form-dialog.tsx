@@ -68,10 +68,18 @@ export function AiSettingFormDialog({
   open,
   onOpenChange,
   setting,
+  apiBase = "/api/admin/ai-settings",
+  queryKey = ["admin", "ai-settings"],
+  lockScope,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   setting?: AiSettingRow | null;
+  /** Where to POST/PATCH/DELETE — org admin vs super admin GLOBAL endpoint. */
+  apiBase?: string;
+  queryKey?: string[];
+  /** When set, the scope select is hidden and forced to this value (super admin GLOBAL-only screen). */
+  lockScope?: "GLOBAL";
 }) {
   const queryClient = useQueryClient();
   const isEdit = !!setting;
@@ -79,7 +87,7 @@ export function AiSettingFormDialog({
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      scope: "ORG",
+      scope: lockScope ?? "ORG",
       feature: "",
       provider: "openai",
       model: "gpt-4o-mini",
@@ -95,7 +103,7 @@ export function AiSettingFormDialog({
   useEffect(() => {
     if (open) {
       form.reset({
-        scope: setting?.scope ?? "ORG",
+        scope: setting?.scope ?? lockScope ?? "ORG",
         feature: setting?.feature ?? "",
         provider: (setting?.provider as FormValues["provider"]) ?? "openai",
         model: setting?.model ?? "gpt-4o-mini",
@@ -107,13 +115,13 @@ export function AiSettingFormDialog({
         monthlySpendCapUsd: setting?.monthlySpendCapUsd ?? undefined,
       });
     }
-  }, [open, setting, form]);
+  }, [open, setting, lockScope, form]);
 
   const scope = form.watch("scope");
 
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
-      const url = isEdit ? `/api/admin/ai-settings/${setting!.id}` : "/api/admin/ai-settings";
+      const url = isEdit ? `${apiBase}/${setting!.id}` : apiBase;
       const method = isEdit ? "PATCH" : "POST";
       const payload = { ...values, feature: values.scope === "FEATURE" ? values.feature : undefined };
 
@@ -130,7 +138,7 @@ export function AiSettingFormDialog({
     },
     onSuccess: () => {
       toast.success(isEdit ? "AI setting updated" : "AI setting created");
-      queryClient.invalidateQueries({ queryKey: ["admin", "ai-settings"] });
+      queryClient.invalidateQueries({ queryKey });
       onOpenChange(false);
     },
     onError: (error: Error) => toast.error(error.message),
@@ -152,28 +160,33 @@ export function AiSettingFormDialog({
             onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
             className="flex flex-col gap-4"
           >
-            <FormField
-              control={form.control}
-              name="scope"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Scope</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value} disabled={isEdit}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="GLOBAL">Global (platform default)</SelectItem>
-                      <SelectItem value="ORG">Organisation</SelectItem>
-                      <SelectItem value="FEATURE">Feature override</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {lockScope ? (
+              <p className="text-sm text-muted-foreground">
+                Scope: <span className="font-medium text-foreground">Global (platform default)</span>
+              </p>
+            ) : (
+              <FormField
+                control={form.control}
+                name="scope"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Scope</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={isEdit}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="ORG">Organisation</SelectItem>
+                        <SelectItem value="FEATURE">Feature override</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             {scope === "FEATURE" && (
               <FormField

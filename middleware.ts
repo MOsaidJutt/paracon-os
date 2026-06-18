@@ -6,7 +6,8 @@ const { auth } = NextAuth(authConfig);
 
 export default auth((req) => {
   const isAuthed = !!req.auth;
-  const isAuthPage = req.nextUrl.pathname.startsWith("/login");
+  const isAuthPage =
+    req.nextUrl.pathname.startsWith("/login") || req.nextUrl.pathname.startsWith("/accept-invite");
 
   if (!isAuthed && !isAuthPage) {
     const loginUrl = new URL("/login", req.nextUrl.origin);

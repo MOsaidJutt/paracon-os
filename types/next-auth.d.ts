@@ -9,6 +9,8 @@ declare module "next-auth" {
       role: string;
       permissions: string[];
     } & DefaultSession["user"];
+    /** Set while a super admin is impersonating another user — holds the super admin's own user id. */
+    impersonatorId?: string | null;
   }
 
   interface User {
@@ -29,5 +31,6 @@ declare module "@auth/core/jwt" {
     organisationSlug: string;
     role: string;
     permissions: string[];
+    impersonatorId?: string | null;
   }
 }

@@ -45,3 +45,8 @@ next-env.d.ts
 # test artifacts
 /test-results/
 /playwright-report/
+
+# local SQLite dev database — contains password hashes, encrypted AI keys and
+# whatever demo/test data has accumulated; never commit a live database file.
+/prisma/dev.db
+/prisma/dev.db-journal

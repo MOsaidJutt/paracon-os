@@ -102,16 +102,20 @@ export interface TestAiSettingResult {
  * Sends a minimal completion request through the given AiSetting row to
  * verify the provider/model/key combination works. Logs the attempt to
  * AiUsageLog regardless of outcome.
+ *
+ * `organisationId: null` means "GLOBAL row, super admin caller" — org
+ * admins (non-null organisationId) can only test their own ORG/FEATURE
+ * rows, never the platform-wide GLOBAL setting.
  */
 export async function testAiSetting(
   settingId: string,
-  organisationId: string
+  organisationId: string | null
 ): Promise<TestAiSettingResult> {
   const setting = await prisma.aiSetting.findFirst({
-    where: {
-      id: settingId,
-      OR: [{ scope: "GLOBAL" }, { organisationId }],
-    },
+    where:
+      organisationId === null
+        ? { id: settingId, scope: "GLOBAL" }
+        : { id: settingId, organisationId, scope: { in: ["ORG", "FEATURE"] } },
   });
   if (!setting) throw new Error("AI setting not found");
 

@@ -4,7 +4,33 @@ import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
 import { authConfig } from "./auth.config";
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+/**
+ * Builds the JWT-shaped identity for a user by id — the same fields
+ * Credentials.authorize() returns at login. Used by the impersonation
+ * routes to swap the session's identity claims via `unstable_update`.
+ */
+export async function loadUserIdentity(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      role: { include: { rolePermissions: { include: { permission: true } } } },
+      organisation: true,
+    },
+  });
+  if (!user || !user.isActive || !user.organisation.isActive) return null;
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    organisationId: user.organisationId,
+    organisationSlug: user.organisation.slug,
+    role: user.role.slug,
+    permissions: user.role.rolePermissions.map((rp) => rp.permission.slug),
+  };
+}
+
+export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   ...authConfig,
   providers: [
     Credentials({

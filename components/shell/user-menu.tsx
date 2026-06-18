@@ -22,13 +22,26 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-export function UserMenu({ name, email }: { name: string; email: string }) {
+export function UserMenu({
+  name,
+  email,
+  onDarkSurface = false,
+}: {
+  name: string;
+  email: string;
+  /** True when rendered on a surface that's dark regardless of the light/dark theme (e.g. the always-ink super-admin header) — picks the light-on-dark brass variant unconditionally instead of following the theme toggle. */
+  onDarkSurface?: boolean;
+}) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="h-12 gap-2 px-2" aria-label={`Account menu for ${name}`}>
           <Avatar className="size-9">
-            <AvatarFallback className="bg-brass/15 text-brass-deep dark:text-brass-light">
+            <AvatarFallback
+              className={
+                onDarkSurface ? "bg-brass/15 text-brass-light" : "bg-brass/15 text-brass-deep dark:text-brass-light"
+              }
+            >
               {initials(name)}
             </AvatarFallback>
           </Avatar>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ZodError, z } from "zod";
 import { toErrorResponse } from "@/lib/api-error";
-import { ForbiddenError, UnauthorisedError } from "@/lib/errors";
+import { ForbiddenError, NotFoundError, UnauthorisedError } from "@/lib/errors";
 
 describe("toErrorResponse", () => {
   it("maps UnauthorisedError to 401", async () => {
@@ -12,6 +12,11 @@ describe("toErrorResponse", () => {
   it("maps ForbiddenError to 403", async () => {
     const res = toErrorResponse(new ForbiddenError("admin.users"));
     expect(res.status).toBe(403);
+  });
+
+  it("maps NotFoundError to 404, not 403 — never confirms cross-tenant existence", async () => {
+    const res = toErrorResponse(new NotFoundError());
+    expect(res.status).toBe(404);
   });
 
   it("maps ZodError to 400 with issue details", async () => {

@@ -27,6 +27,8 @@ model Organisation {
   aiUsageLogs         AiUsageLog[]
   organisationModules OrganisationModule[]
   auditLogs           AuditLog[]
+  invites             Invite[]
+  configs             Config[]
 }
 
 // ─── Identity & Access ────────────────────────────────────────────────────────
@@ -44,7 +46,8 @@ model User {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  auditLogs AuditLog[]
+  auditLogs   AuditLog[]
+  sentInvites Invite[]
 
   @@unique([organisationId, email])
   @@index([roleId])
@@ -62,6 +65,7 @@ model Role {
 
   users           User[]
   rolePermissions RolePermission[]
+  invites         Invite[]
 
   @@unique([organisationId, slug])
 }
@@ -85,6 +89,24 @@ model RolePermission {
   @@id([roleId, permissionId])
 }
 
+model Invite {
+  id              String       @id @default(cuid())
+  organisationId  String
+  organisation    Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  email           String
+  roleId          String
+  role            Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  tokenHash       String       @unique
+  invitedByUserId String
+  invitedBy       User         @relation(fields: [invitedByUserId], references: [id])
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdAt       DateTime     @default(now())
+
+  @@index([organisationId, email])
+  @@index([roleId])
+}
+
 // ─── AI Configuration ─────────────────────────────────────────────────────────
 
 enum AiScope {
@@ -94,41 +116,41 @@ enum AiScope {
 }
 
 model AiSetting {
-  id                 String       @id @default(cuid())
-  scope              AiScope      @default(GLOBAL)
+  id                 String        @id @default(cuid())
+  scope              AiScope       @default(GLOBAL)
   organisationId     String?
   organisation       Organisation? @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   feature            String?
-  provider           String       @default("openai")
-  model              String       @default("gpt-4o-mini")
+  provider           String        @default("openai")
+  model              String        @default("gpt-4o-mini")
   apiKeyEncrypted    String
   baseUrl            String?
-  temperature        Float        @default(0.7)
-  maxTokens          Int          @default(2000)
-  enabled            Boolean      @default(true)
+  temperature        Float         @default(0.7)
+  maxTokens          Int           @default(2000)
+  enabled            Boolean       @default(true)
   monthlySpendCapUsd Float?
   updatedBy          String?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   @@index([organisationId])
   @@index([scope, organisationId, feature])
 }
 
 model AiUsageLog {
-  id                String       @id @default(cuid())
-  organisationId    String?
-  organisation      Organisation? @relation(fields: [organisationId], references: [id], onDelete: SetNull)
-  feature           String
-  provider          String
-  model             String
-  promptTokens      Int          @default(0)
-  completionTokens  Int          @default(0)
-  costEstimateUsd   Float        @default(0)
-  latencyMs         Int          @default(0)
-  success           Boolean      @default(true)
-  error             String?
-  createdAt         DateTime     @default(now())
+  id               String        @id @default(cuid())
+  organisationId   String?
+  organisation     Organisation? @relation(fields: [organisationId], references: [id], onDelete: SetNull)
+  feature          String
+  provider         String
+  model            String
+  promptTokens     Int           @default(0)
+  completionTokens Int           @default(0)
+  costEstimateUsd  Float         @default(0)
+  latencyMs        Int           @default(0)
+  success          Boolean       @default(true)
+  error            String?
+  createdAt        DateTime      @default(now())
 
   @@index([organisationId])
   @@index([createdAt])
@@ -158,14 +180,42 @@ model OrganisationModule {
   @@id([organisationId, moduleId])
 }
 
+// ─── Settings Registry ───────────────────────────────────────────────────────
+
+enum ConfigType {
+  LIST
+  NUMBER
+  WEIGHTS
+  BANDS
+}
+
+model Config {
+  id             String        @id @default(cuid())
+  organisationId String?
+  organisation   Organisation? @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  key            String
+  group          String
+  type           ConfigType
+  valueJson      Json
+  label          String
+  description    String        @default("")
+  isSystem       Boolean       @default(false)
+  updatedBy      String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([organisationId, key])
+  @@index([key])
+}
+
 // ─── Audit Log ────────────────────────────────────────────────────────────────
 
 model AuditLog {
-  id             String       @id @default(cuid())
+  id             String        @id @default(cuid())
   organisationId String?
   organisation   Organisation? @relation(fields: [organisationId], references: [id], onDelete: SetNull)
   userId         String?
-  user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
   action         String
   entityType     String
   entityId       String?
@@ -173,7 +223,7 @@ model AuditLog {
   after          Json?
   ipAddress      String?
   userAgent      String?
-  createdAt      DateTime     @default(now())
+  createdAt      DateTime      @default(now())
 
   @@index([organisationId])
   @@index([userId])

@@ -14,6 +14,8 @@ export const PERMISSION_GROUPS = {
     "admin.billing",
     "admin.modules",
     "admin.branding",
+    "admin.audit",
+    "admin.settings",
   ],
   ai: ["ai.assistant.use"],
   platform: ["platform.superadmin"],

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
+import { ImpersonationBanner } from "@/components/shell/impersonation-banner";
 
 export default async function ShellLayout({
   children,
@@ -22,6 +23,9 @@ export default async function ShellLayout({
     <div className="flex h-screen overflow-hidden">
       <Sidebar permissions={session.user.permissions} />
       <div className="flex flex-1 flex-col overflow-hidden">
+        {session.impersonatorId && (
+          <ImpersonationBanner name={session.user.name ?? session.user.email ?? "user"} />
+        )}
         <Topbar
           orgName={organisation.name}
           logoUrl={organisation.logoUrl}

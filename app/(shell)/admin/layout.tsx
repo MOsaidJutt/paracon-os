@@ -6,8 +6,11 @@ const TABS = [
   { href: "/admin/users", label: "Users", permission: "admin.users" },
   { href: "/admin/roles", label: "Roles & Permissions", permission: "admin.roles" },
   { href: "/admin/ai-settings", label: "AI Settings", permission: "admin.ai" },
+  { href: "/admin/ai-usage", label: "AI Usage", permission: "admin.ai" },
   { href: "/admin/modules", label: "Modules", permission: "admin.modules" },
   { href: "/admin/branding", label: "Branding", permission: "admin.branding" },
+  { href: "/admin/audit", label: "Audit Log", permission: "admin.audit" },
+  { href: "/admin/settings", label: "Settings", permission: "admin.settings" },
   { href: "/admin/billing", label: "Billing", permission: "admin.billing" },
 ];
 
