@@ -1,4 +1,4 @@
-# Paracon OS
+# OneParacon
 
 Multi-tenant, AI-integrated construction operating system for Paracon Group ("Build in Parallel").
 Phase 1: hardened multi-tenancy/auth/RBAC, full Roles & Permissions and invite-by-email, a
@@ -61,7 +61,7 @@ Next.js 14 (App Router) + TypeScript, Tailwind + shadcn/ui, Prisma + PostgreSQL 
    | pm@paracon.com.au | Project Manager |
    | foreman@paracon.com.au | Site Foreman |
    | estimator@paracon.com.au | Estimator |
-   | superadmin@paracon-os.com | Super Admin (platform-wide, separate org) |
+   | superadmin@oneparacon.com | Super Admin (platform-wide, separate org) |
 
 4. **Run the app**
 

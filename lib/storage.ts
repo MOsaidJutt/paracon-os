@@ -26,12 +26,52 @@ export async function uploadLogo(organisationId: string, fileBuffer: Buffer): Pr
     .png()
     .toBuffer();
 
-  const bucket = process.env.R2_BUCKET ?? "paracon-os";
+  const bucket = process.env.R2_BUCKET ?? "oneparacon";
   const key = `logos/${organisationId}.png`;
 
   const client = getR2Client();
   await client.send(
     new PutObjectCommand({ Bucket: bucket, Key: key, Body: png, ContentType: "image/png" })
+  );
+
+  const publicUrl = process.env.R2_PUBLIC_URL ?? "";
+  return `${publicUrl}/${key}?v=${Date.now()}`;
+}
+
+/** Normalises a worker photo to a 512x512 cropped PNG, mirroring uploadLogo's treatment. */
+export async function uploadWorkerPhoto(organisationId: string, workerId: string, fileBuffer: Buffer): Promise<string> {
+  const png = await sharp(fileBuffer)
+    .resize(512, 512, { fit: "cover" })
+    .png()
+    .toBuffer();
+
+  const bucket = process.env.R2_BUCKET ?? "oneparacon";
+  const key = `workers/${organisationId}/${workerId}/photo.png`;
+
+  const client = getR2Client();
+  await client.send(
+    new PutObjectCommand({ Bucket: bucket, Key: key, Body: png, ContentType: "image/png" })
+  );
+
+  const publicUrl = process.env.R2_PUBLIC_URL ?? "";
+  return `${publicUrl}/${key}?v=${Date.now()}`;
+}
+
+/** Compliance docs (White Card photos, licenses, tickets) are stored as-is — no image normalisation. */
+export async function uploadComplianceDoc(
+  organisationId: string,
+  workerId: string,
+  complianceId: string,
+  fileBuffer: Buffer,
+  contentType: string,
+  fileName: string
+): Promise<string> {
+  const bucket = process.env.R2_BUCKET ?? "oneparacon";
+  const key = `compliance/${organisationId}/${workerId}/${complianceId}/${fileName}`;
+
+  const client = getR2Client();
+  await client.send(
+    new PutObjectCommand({ Bucket: bucket, Key: key, Body: fileBuffer, ContentType: contentType })
   );
 
   const publicUrl = process.env.R2_PUBLIC_URL ?? "";

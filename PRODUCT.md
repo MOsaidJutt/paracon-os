@@ -17,7 +17,7 @@ Context: Paracon Group, a high-end commercial fitout firm in North Melbourne ("B
 
 ## Product Purpose
 
-Paracon OS is a construction operating system: tender pipeline → projects/program → labour intelligence → forecast & capacity → allocation → site daily updates → productivity feedback loop, with an AI layer throughout. Success looks like: a director sees project health and capacity at a glance, a PM staffs projects without surprises, and a foreman completes a full daily update in under 5 minutes one-handed.
+OneParacon is a construction operating system: tender pipeline → projects/program → labour intelligence → forecast & capacity → allocation → site daily updates → productivity feedback loop, with an AI layer throughout. Success looks like: a director sees project health and capacity at a glance, a PM staffs projects without surprises, and a foreman completes a full daily update in under 5 minutes one-handed.
 
 ## Brand Personality
 

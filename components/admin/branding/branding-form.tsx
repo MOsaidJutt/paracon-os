@@ -103,7 +103,7 @@ export function BrandingForm() {
           <CardTitle className="text-base">Accent colour</CardTitle>
           <CardDescription>
             Choose from the brand-approved swatches — kept within guardrails so every tenant still
-            feels like Paracon OS.
+            feels like OneParacon.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex gap-3">

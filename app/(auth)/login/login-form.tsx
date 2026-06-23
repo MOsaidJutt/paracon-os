@@ -42,7 +42,7 @@ export function LoginForm() {
     <Card className="w-full max-w-sm border-border/60 shadow-sm">
       <CardHeader>
         <CardTitle className="font-heading text-xl">Sign in</CardTitle>
-        <CardDescription>Use your Paracon OS credentials.</CardDescription>
+        <CardDescription>Use your OneParacon credentials.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={onSubmit} className="flex flex-col gap-4">

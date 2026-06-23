@@ -20,7 +20,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
     <div className="flex min-h-screen flex-col bg-background">
       <header className="flex h-16 items-center justify-between border-b border-border bg-ink px-4 lg:px-6 text-paper">
         <div className="flex items-center gap-3">
-          <span className="font-heading text-base font-semibold text-paper">Paracon OS — Platform</span>
+          <span className="font-heading text-base font-semibold text-paper">OneParacon — Platform</span>
         </div>
         <div className="flex items-center gap-3">
           <Link href="/dashboard" className="text-sm text-paper/70 hover:text-paper">

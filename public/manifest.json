@@ -1,6 +1,6 @@
 {
-  "name": "Paracon OS",
-  "short_name": "Paracon OS",
+  "name": "OneParacon",
+  "short_name": "OneParacon",
   "description": "Build in Parallel — Paracon Group's construction operating system.",
   "start_url": "/dashboard",
   "scope": "/",

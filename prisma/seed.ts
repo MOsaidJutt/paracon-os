@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { encrypt } from "../lib/crypto";
 import { PERMISSION_GROUPS } from "../lib/permissions";
 import { PERMISSION_LABELS, ROLE_DEFINITIONS, MODULES, CONFIG_DEFAULTS } from "../lib/seed-data";
+import { computeComplianceStatus } from "../lib/labour/compliance";
 
 const prisma = new PrismaClient();
 
@@ -15,7 +16,236 @@ const DEMO_USERS = [
 
 const DEMO_PASSWORD = "Demo1234!";
 
-const SUPER_ADMIN_EMAIL = "superadmin@paracon-os.com";
+const SUPER_ADMIN_EMAIL = "superadmin@oneparacon.com";
+
+// Matches the seeded compliance.expiringThresholdDays Config default — used to
+// pre-compute a realistic Valid/Expiring/Expired status for each demo record.
+const COMPLIANCE_EXPIRING_THRESHOLD_DAYS = 30;
+
+const DEMO_SKILLS = [
+  "Formwork",
+  "Fit-out Carpentry",
+  "Joinery Install",
+  "Ceiling & Partition Systems",
+  "Glazing",
+  "Switchboard Install",
+  "Data Cabling",
+  "Site Safety Leadership",
+] as const;
+
+type DemoCompliance = { type: string; reference?: string; issuedDate?: Date; expiryDate?: Date | null };
+type DemoWorker = {
+  name: string;
+  phone: string;
+  capability: string;
+  employmentType: string;
+  status: string;
+  baseLocation: string;
+  performance: { quality: number; reliability: number; productivity: number; safety: number };
+  skills: { skill: string; level: number }[];
+  compliance: DemoCompliance[];
+  leave?: { startDate: Date; endDate: Date; reason: string };
+};
+
+const today = new Date();
+function daysFromNow(days: number): Date {
+  return new Date(today.getTime() + days * 86_400_000);
+}
+function daysAgo(days: number): Date {
+  return daysFromNow(-days);
+}
+
+const DEMO_WORKERS: DemoWorker[] = [
+  {
+    name: "Marcus Webb",
+    phone: "0411 222 001",
+    capability: "Site Foreman",
+    employmentType: "Direct Employee",
+    status: "Available",
+    baseLocation: "North Melbourne",
+    performance: { quality: 4.5, reliability: 5, productivity: 4.5, safety: 5 },
+    skills: [
+      { skill: "Fit-out Carpentry", level: 5 },
+      { skill: "Site Safety Leadership", level: 5 },
+    ],
+    compliance: [
+      { type: "White Card", reference: "WC-10021", issuedDate: daysAgo(700), expiryDate: daysFromNow(900) },
+      { type: "Company Induction", reference: "CI-1001", issuedDate: daysAgo(120) },
+    ],
+  },
+  {
+    name: "Daniel Okafor",
+    phone: "0411 222 002",
+    capability: "Lead Carpenter",
+    employmentType: "Direct Employee",
+    status: "Assigned",
+    baseLocation: "Brunswick",
+    performance: { quality: 4.5, reliability: 4, productivity: 4.5, safety: 4.5 },
+    skills: [
+      { skill: "Fit-out Carpentry", level: 5 },
+      { skill: "Joinery Install", level: 4 },
+      { skill: "Formwork", level: 3 },
+    ],
+    compliance: [
+      { type: "White Card", reference: "WC-10022", issuedDate: daysAgo(500), expiryDate: daysFromNow(700) },
+      { type: "Company Induction", reference: "CI-1002", issuedDate: daysAgo(90) },
+    ],
+  },
+  {
+    name: "Tane Williams",
+    phone: "0411 222 003",
+    capability: "All-round Carpenter",
+    employmentType: "Direct Employee",
+    status: "Available",
+    baseLocation: "Coburg",
+    performance: { quality: 4, reliability: 4, productivity: 4, safety: 4 },
+    skills: [
+      { skill: "Fit-out Carpentry", level: 4 },
+      { skill: "Joinery Install", level: 3 },
+      { skill: "Ceiling & Partition Systems", level: 3 },
+    ],
+    compliance: [
+      { type: "White Card", reference: "WC-10023", issuedDate: daysAgo(300), expiryDate: daysFromNow(600) },
+      { type: "Company Induction", reference: "CI-1003", issuedDate: daysAgo(60) },
+    ],
+  },
+  {
+    name: "Jacob Ferreira",
+    phone: "0411 222 004",
+    capability: "Carpenter",
+    employmentType: "Subcontractor",
+    status: "Available",
+    baseLocation: "Essendon",
+    performance: { quality: 3.5, reliability: 3.5, productivity: 4, safety: 3.5 },
+    skills: [
+      { skill: "Fit-out Carpentry", level: 3 },
+      { skill: "Formwork", level: 3 },
+    ],
+    compliance: [
+      // Expires within the 30-day threshold — this is the worker the acceptance
+      // criterion ("an expiring White Card raises an alert") is built around.
+      { type: "White Card", reference: "WC-10024", issuedDate: daysAgo(1065), expiryDate: daysFromNow(20) },
+      { type: "Company Induction", reference: "CI-1004", issuedDate: daysAgo(45) },
+    ],
+  },
+  {
+    name: "Liam Foster",
+    phone: "0411 222 005",
+    capability: "Carpenter",
+    employmentType: "Direct Employee",
+    status: "On Leave",
+    baseLocation: "Fitzroy",
+    performance: { quality: 4, reliability: 3.5, productivity: 3.5, safety: 4 },
+    skills: [{ skill: "Fit-out Carpentry", level: 3 }],
+    compliance: [
+      { type: "White Card", reference: "WC-10025", issuedDate: daysAgo(400), expiryDate: daysFromNow(500) },
+      { type: "Company Induction", reference: "CI-1005", issuedDate: daysAgo(100) },
+    ],
+    leave: { startDate: daysAgo(2), endDate: daysFromNow(5), reason: "Annual leave" },
+  },
+  {
+    name: "Priya Nair",
+    phone: "0411 222 006",
+    capability: "Electrician",
+    employmentType: "Subcontractor",
+    status: "Available",
+    baseLocation: "Thornbury",
+    performance: { quality: 4.5, reliability: 4.5, productivity: 4, safety: 4.5 },
+    skills: [
+      { skill: "Switchboard Install", level: 5 },
+      { skill: "Data Cabling", level: 4 },
+    ],
+    compliance: [
+      { type: "White Card", reference: "WC-10026", issuedDate: daysAgo(800), expiryDate: daysFromNow(400) },
+      { type: "License", reference: "EL-44210", issuedDate: daysAgo(900), expiryDate: daysFromNow(365) },
+    ],
+  },
+  {
+    name: "Sione Taufa",
+    phone: "0411 222 007",
+    capability: "Plumber",
+    employmentType: "Subcontractor",
+    status: "Assigned",
+    baseLocation: "Reservoir",
+    performance: { quality: 4, reliability: 3.5, productivity: 4, safety: 3.5 },
+    skills: [{ skill: "Fit-out Carpentry", level: 1 }],
+    compliance: [
+      { type: "White Card", reference: "WC-10027", issuedDate: daysAgo(600), expiryDate: daysFromNow(300) },
+      // Already expired — demonstrates the Expired branch alongside Jacob's Expiring one.
+      { type: "Ticket", reference: "EWP-7781", issuedDate: daysAgo(800), expiryDate: daysAgo(30) },
+    ],
+  },
+  {
+    name: "Grace Halloran",
+    phone: "0411 222 008",
+    capability: "Plasterer",
+    employmentType: "Direct Employee",
+    status: "Available",
+    baseLocation: "Northcote",
+    performance: { quality: 4.5, reliability: 4.5, productivity: 4, safety: 4 },
+    skills: [{ skill: "Ceiling & Partition Systems", level: 5 }],
+    compliance: [
+      { type: "White Card", reference: "WC-10028", issuedDate: daysAgo(250), expiryDate: daysFromNow(800) },
+      { type: "Company Induction", reference: "CI-1008", issuedDate: daysAgo(40) },
+    ],
+  },
+  {
+    name: "Owen Fitzgerald",
+    phone: "0411 222 009",
+    capability: "Painter",
+    employmentType: "Casual",
+    status: "Available",
+    baseLocation: "Carlton",
+    performance: { quality: 3.5, reliability: 3.5, productivity: 3.5, safety: 3.5 },
+    skills: [],
+    compliance: [{ type: "White Card", reference: "WC-10029", issuedDate: daysAgo(150), expiryDate: daysFromNow(600) }],
+  },
+  {
+    name: "Mei Lin Tan",
+    phone: "0411 222 010",
+    capability: "Site Labourer",
+    employmentType: "Casual",
+    status: "Available",
+    baseLocation: "West Melbourne",
+    performance: { quality: 3.5, reliability: 4, productivity: 3.5, safety: 4 },
+    skills: [],
+    compliance: [
+      { type: "White Card", reference: "WC-10030", issuedDate: daysAgo(90), expiryDate: daysFromNow(900) },
+      { type: "Company Induction", reference: "CI-1010", issuedDate: daysAgo(20) },
+    ],
+  },
+  {
+    name: "Connor Doyle",
+    phone: "0411 222 011",
+    capability: "Project Engineer",
+    employmentType: "Direct Employee",
+    status: "Available",
+    baseLocation: "North Melbourne",
+    performance: { quality: 4.5, reliability: 4.5, productivity: 4.5, safety: 4.5 },
+    skills: [{ skill: "Site Safety Leadership", level: 4 }],
+    compliance: [
+      { type: "White Card", reference: "WC-10031", issuedDate: daysAgo(900), expiryDate: daysFromNow(365) },
+      { type: "Company Induction", reference: "CI-1011", issuedDate: daysAgo(200) },
+    ],
+  },
+  {
+    name: "Hassan Ali",
+    phone: "0411 222 012",
+    capability: "All-round Carpenter",
+    employmentType: "Direct Employee",
+    status: "Assigned",
+    baseLocation: "Pascoe Vale",
+    performance: { quality: 4, reliability: 4, productivity: 4, safety: 4 },
+    skills: [
+      { skill: "Fit-out Carpentry", level: 4 },
+      { skill: "Glazing", level: 2 },
+    ],
+    compliance: [
+      { type: "White Card", reference: "WC-10032", issuedDate: daysAgo(350), expiryDate: daysFromNow(700) },
+      { type: "Uniform", reference: "UNI-220", issuedDate: daysAgo(60) },
+    ],
+  },
+];
 
 async function main() {
   console.log("Seeding permissions...");
@@ -153,6 +383,88 @@ async function main() {
     }
   }
 
+  // Labour Intelligence demo data (workers, skills, compliance, leave)
+  console.log("Seeding Labour Intelligence demo data...");
+
+  const skillIdByName = new Map<string, string>();
+  for (const name of DEMO_SKILLS) {
+    const skill = await prisma.skill.upsert({
+      where: { organisationId_name: { organisationId: org.id, name } },
+      update: {},
+      create: { organisationId: org.id, name },
+    });
+    skillIdByName.set(name, skill.id);
+  }
+
+  for (const demoWorker of DEMO_WORKERS) {
+    const existingWorker = await prisma.worker.findFirst({ where: { organisationId: org.id, name: demoWorker.name } });
+    const worker = existingWorker
+      ? await prisma.worker.update({
+          where: { id: existingWorker.id },
+          data: {
+            phone: demoWorker.phone,
+            capability: demoWorker.capability,
+            employmentType: demoWorker.employmentType,
+            status: demoWorker.status,
+            baseLocation: demoWorker.baseLocation,
+          },
+        })
+      : await prisma.worker.create({
+          data: {
+            organisationId: org.id,
+            name: demoWorker.name,
+            phone: demoWorker.phone,
+            capability: demoWorker.capability,
+            employmentType: demoWorker.employmentType,
+            status: demoWorker.status,
+            baseLocation: demoWorker.baseLocation,
+          },
+        });
+
+    await prisma.workerPerformance.upsert({
+      where: { workerId: worker.id },
+      update: demoWorker.performance,
+      create: { workerId: worker.id, ...demoWorker.performance },
+    });
+
+    await prisma.workerSkill.deleteMany({ where: { workerId: worker.id } });
+    for (const { skill, level } of demoWorker.skills) {
+      const skillId = skillIdByName.get(skill);
+      if (!skillId) throw new Error(`Unknown demo skill "${skill}"`);
+      await prisma.workerSkill.create({ data: { workerId: worker.id, skillId, level } });
+    }
+
+    await prisma.compliance.deleteMany({ where: { workerId: worker.id } });
+    for (const c of demoWorker.compliance) {
+      const expiryDate = c.expiryDate ?? null;
+      const status = computeComplianceStatus(expiryDate, COMPLIANCE_EXPIRING_THRESHOLD_DAYS, today);
+      await prisma.compliance.create({
+        data: {
+          organisationId: org.id,
+          workerId: worker.id,
+          type: c.type,
+          reference: c.reference,
+          issuedDate: c.issuedDate,
+          expiryDate,
+          status,
+        },
+      });
+    }
+
+    await prisma.workerLeave.deleteMany({ where: { workerId: worker.id } });
+    if (demoWorker.leave) {
+      await prisma.workerLeave.create({
+        data: {
+          organisationId: org.id,
+          workerId: worker.id,
+          startDate: demoWorker.leave.startDate,
+          endDate: demoWorker.leave.endDate,
+          reason: demoWorker.leave.reason,
+        },
+      });
+    }
+  }
+
   // Platform org — hosts the Super Admin account, kept separate from any
   // tenant so "which org does this user belong to" never gets ambiguous
   // for someone with cross-tenant (platform.superadmin) access.
@@ -161,7 +473,7 @@ async function main() {
   const platformOrg = await prisma.organisation.upsert({
     where: { slug: "platform" },
     update: {},
-    create: { name: "Paracon OS Platform", slug: "platform" },
+    create: { name: "OneParacon Platform", slug: "platform" },
   });
 
   const superAdminRole = await prisma.role.upsert({

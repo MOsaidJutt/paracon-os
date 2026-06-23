@@ -13,13 +13,13 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Paracon OS",
+  title: "OneParacon",
   description: "Build in Parallel — Paracon Group's construction operating system.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Paracon OS",
+    title: "OneParacon",
   },
   icons: {
     icon: "/favicon.png",

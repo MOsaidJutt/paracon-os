@@ -21,11 +21,11 @@ export async function sendInviteEmail(input: {
 
   const resend = new Resend(apiKey);
   await resend.emails.send({
-    from: process.env.EMAIL_FROM ?? "Paracon OS <onboarding@paracon.com.au>",
+    from: process.env.EMAIL_FROM ?? "OneParacon <onboarding@paracon.com.au>",
     to: input.to,
-    subject: `You've been invited to ${input.orgName} on Paracon OS`,
+    subject: `You've been invited to ${input.orgName} on OneParacon`,
     html: `
-      <p>You've been invited to join <strong>${input.orgName}</strong> on Paracon OS as <strong>${input.roleName}</strong>.</p>
+      <p>You've been invited to join <strong>${input.orgName}</strong> on OneParacon as <strong>${input.roleName}</strong>.</p>
       <p><a href="${input.inviteUrl}">Accept the invite</a> to set your password and sign in.</p>
       <p>This link expires in 7 days.</p>
     `,
