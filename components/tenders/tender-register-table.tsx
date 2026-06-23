@@ -16,6 +16,7 @@ type ApiTender = TenderRow & {
   winProbabilityNumeric: number;
   client: { id: string; name: string };
   contact: { id: string; name: string } | null;
+  project: { id: string; code: string } | null;
 };
 
 function statusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {

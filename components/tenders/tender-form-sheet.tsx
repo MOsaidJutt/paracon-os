@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,6 +42,7 @@ export type TenderRow = {
   winningCo: string | null;
   priceDeltaPct: number | null;
   marginPct: number | null;
+  project?: { id: string; code: string } | null;
 };
 
 type ClientOption = { id: string; name: string; contacts: { id: string; name: string }[] };
@@ -122,6 +124,7 @@ export function TenderFormSheet({
   tender?: TenderRow | null;
 }) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const isEdit = !!tender;
 
   const { data: config } = useQuery({
@@ -184,6 +187,24 @@ export function TenderFormSheet({
       toast.success(isEdit ? "Tender updated" : "Tender created");
       queryClient.invalidateQueries({ queryKey: ["tenders"] });
       onOpenChange(false);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const convertMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/tenders/${tender!.id}/convert-to-project`, { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to convert tender");
+      }
+      return (await res.json()) as { project: { id: string } };
+    },
+    onSuccess: ({ project }) => {
+      toast.success("Project created from tender");
+      queryClient.invalidateQueries({ queryKey: ["tenders"] });
+      onOpenChange(false);
+      router.push(`/projects/${project.id}`);
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -528,6 +549,26 @@ export function TenderFormSheet({
                 )}
               />
             </div>
+
+            {isEdit && tender!.status === "Won" && (
+              <div className="rounded-lg border border-border p-3">
+                {tender!.project ? (
+                  <Button type="button" variant="outline" className="w-full" asChild>
+                    <a href={`/projects/${tender!.project.id}`}>View project {tender!.project.code}</a>
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    disabled={convertMutation.isPending}
+                    onClick={() => convertMutation.mutate()}
+                  >
+                    {convertMutation.isPending ? "Converting..." : "Convert to project"}
+                  </Button>
+                )}
+              </div>
+            )}
 
             <SheetFooter className="mt-2">
               <Button type="submit" disabled={mutation.isPending}>

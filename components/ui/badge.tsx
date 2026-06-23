@@ -15,6 +15,10 @@ const badgeVariants = cva(
         destructive:
           "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
         outline: "text-foreground",
+        // RAG green/amber — contrast-verified: white on rag-green passes AA (5.1:1),
+        // white on rag-amber does not (2.3:1), so warning uses dark ink text instead.
+        success: "border-transparent bg-rag-green text-white shadow hover:bg-rag-green/90",
+        warning: "border-transparent bg-rag-amber text-ink shadow hover:bg-rag-amber/90",
       },
     },
     defaultVariants: {

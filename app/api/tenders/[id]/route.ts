@@ -6,6 +6,7 @@ import { toErrorResponse } from "@/lib/api-error";
 import { NotFoundError } from "@/lib/errors";
 import { updateTenderSchema } from "@/lib/validations/tender";
 import { assertInList, deriveTenderComputedFields, loadTenderConfig } from "@/lib/tenders/config";
+import { sendEvent } from "@/lib/inngest/send-safe";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -14,7 +15,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
     const tender = await db.tender.findFirst({
       where: { id: params.id },
-      include: { client: { select: { id: true, name: true } }, contact: { select: { id: true, name: true } } },
+      include: {
+        client: { select: { id: true, name: true } },
+        contact: { select: { id: true, name: true } },
+        project: { select: { id: true, code: true } },
+      },
     });
     if (!tender) throw new NotFoundError("Tender not found");
 
@@ -101,6 +106,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       before: { status: existing.status, value: existing.value },
       after: { status: tender.status, value: tender.value },
     });
+    await sendEvent("forecast/recompute.requested");
 
     return NextResponse.json({ tender });
   } catch (error) {
@@ -126,6 +132,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
       entityId: params.id,
       before: { projectName: existing.projectName },
     });
+    await sendEvent("forecast/recompute.requested");
 
     return NextResponse.json({ ok: true });
   } catch (error) {

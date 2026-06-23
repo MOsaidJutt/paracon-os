@@ -1,4 +1,7 @@
 import { auth } from "@/lib/auth";
+import { getTenantContext } from "@/lib/tenant";
+import { filterUpcomingMilestones } from "@/lib/projects/calculations";
+import { formatDate } from "@/lib/tenders/format";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const ROLE_COPY: Record<string, { title: string; description: string }> = {
@@ -31,6 +34,19 @@ export default async function DashboardPage() {
   const role = session?.user?.role ?? "viewer";
   const copy = ROLE_COPY[role] ?? ROLE_COPY.viewer;
 
+  const canViewProjects = session?.user?.permissions.includes("project.view") ?? false;
+  const upcomingMilestones = canViewProjects
+    ? filterUpcomingMilestones(
+        await getTenantContext(session!.user.organisationId).milestone.findMany({
+          where: { date: { gte: new Date() } },
+          orderBy: { date: "asc" },
+          include: { project: { select: { name: true, code: true } } },
+        }),
+        new Date(),
+        30
+      )
+    : [];
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -39,6 +55,32 @@ export default async function DashboardPage() {
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">{copy.description}</p>
       </div>
+
+      {canViewProjects && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Critical dates — next 30 days</CardTitle>
+            <CardDescription>Auto-derived from critical activities across every project.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {upcomingMilestones.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No critical dates in the next 30 days.</p>
+            ) : (
+              <ul className="flex flex-col gap-1.5">
+                {upcomingMilestones.slice(0, 10).map((m) => (
+                  <li key={m.id} className="flex items-center justify-between text-sm">
+                    <span className="text-foreground">
+                      {m.project.name} <span className="text-muted-foreground">({m.project.code})</span> —{" "}
+                      {m.name}
+                    </span>
+                    <span className="text-muted-foreground">{formatDate(m.date)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-dashed">
         <CardHeader>

@@ -1,5 +1,6 @@
-import { getConfig } from "@/lib/config";
-import { BadRequestError } from "@/lib/errors";
+import { assertInList, getConfig } from "@/lib/config";
+
+export { assertInList };
 
 export type ValueBand = { label: string; max: number | null };
 
@@ -28,12 +29,6 @@ export async function loadTenderConfig(organisationId: string): Promise<TenderCo
       getConfig<string[]>("tender.intentList", organisationId),
     ]);
   return { statusList, outcomeList, winProbWeights, statusWeights, valueBands, clientStatusList, bidDecisionList, intentList };
-}
-
-export function assertInList(value: string, list: string[], field: string): void {
-  if (!list.includes(value)) {
-    throw new BadRequestError(`Invalid ${field} "${value}". Must be one of: ${list.join(", ")}`);
-  }
 }
 
 /** Resolves a value into its band label using the lowest threshold the value doesn't exceed. */

@@ -7,6 +7,8 @@ export const UNSCOPED_MODELS = new Set([
   "permission",
   "auditlog", // audit logs are org-scoped but written explicitly; reads go through unscoped
   "clientcontact", // no organisationId of its own — scoped indirectly via its parent Client
+  "workerperformance", // no organisationId of its own — scoped indirectly via its parent Worker
+  "workerskill", // no organisationId of its own — scoped indirectly via its parent Worker
 ]);
 
 const WHERE_OPS = new Set([

@@ -3,6 +3,7 @@ export const PERMISSION_GROUPS = {
   project: ["project.view", "project.edit"],
   program: ["program.edit"],
   labour: ["labour.view", "worker.edit"],
+  forecast: ["forecast.view"],
   compliance: ["compliance.manage"],
   allocation: ["allocation.edit"],
   site: ["site.update"],

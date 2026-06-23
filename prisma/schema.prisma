@@ -32,6 +32,14 @@ model Organisation {
   clients             Client[]
   suppliers           Supplier[]
   tenders             Tender[]
+  projects            Project[]
+  programActivities   ProgramActivity[]
+  milestones          Milestone[]
+  workers             Worker[]
+  compliance          Compliance[]
+  skills              Skill[]
+  workerLeave         WorkerLeave[]
+  forecastSnapshot    ForecastSnapshot?
 }
 
 // ─── Identity & Access ────────────────────────────────────────────────────────
@@ -49,8 +57,9 @@ model User {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  auditLogs   AuditLog[]
-  sentInvites Invite[]
+  auditLogs    AuditLog[]
+  sentInvites  Invite[]
+  pmProjects   Project[]
 
   @@unique([organisationId, email])
   @@index([roleId])
@@ -229,6 +238,7 @@ model Client {
 
   contacts ClientContact[]
   tenders  Tender[]
+  projects Project[]
 
   @@unique([organisationId, name])
   @@index([organisationId])
@@ -304,11 +314,214 @@ model Tender {
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
 
+  project Project?
+
   @@unique([organisationId, projectName, clientId])
   @@index([organisationId, status])
   @@index([organisationId, clientId])
   @@index([organisationId, due])
   @@index([organisationId, outcome])
+}
+
+// ─── Projects & Construction Program ─────────────────────────────────────────
+// Status/trade/milestoneType are free-text, validated at the Zod layer against
+// the Config registry (project.statusList, activity.statusList,
+// milestone.typeList, trade.capabilityList) rather than Prisma enums, mirroring
+// the Tender pipeline's CONFIG NOT CODE approach.
+
+model Project {
+  id             String       @id @default(cuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  name           String
+  code           String
+  address        String?
+  status         String
+  value          Float        @default(0)
+  startDate      DateTime
+  endDate        DateTime
+  clientId       String
+  client         Client       @relation(fields: [clientId], references: [id])
+  sourceTenderId String?      @unique
+  sourceTender   Tender?      @relation(fields: [sourceTenderId], references: [id])
+  pmUserId       String?
+  pmUser         User?        @relation(fields: [pmUserId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  activities ProgramActivity[]
+  milestones Milestone[]
+
+  @@unique([organisationId, code])
+  @@index([organisationId, status])
+  @@index([organisationId, clientId])
+}
+
+model ProgramActivity {
+  id             String       @id @default(cuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  projectId      String
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name           String
+  trade          String
+  startDate      DateTime
+  endDate        DateTime
+  isCritical     Boolean      @default(false)
+  milestoneType  String?
+  status         String
+  // Record<role, count> — crew size required per role each week this activity is active.
+  labourRequired Json
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  milestones Milestone[]
+
+  @@index([organisationId])
+  @@index([projectId, startDate])
+}
+
+model Milestone {
+  id               String           @id @default(cuid())
+  organisationId   String
+  organisation     Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  projectId        String
+  project          Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name             String
+  date             DateTime
+  milestoneType    String?
+  // Set when this milestone was auto-derived from a critical ProgramActivity;
+  // re-synced (deleted + recreated) whenever that activity's program changes.
+  sourceActivityId String?          @unique
+  sourceActivity   ProgramActivity? @relation(fields: [sourceActivityId], references: [id], onDelete: Cascade)
+  createdAt        DateTime         @default(now())
+
+  @@index([organisationId])
+  @@index([projectId, date])
+}
+
+// ─── Labour Intelligence ──────────────────────────────────────────────────────
+// capability/employmentType/status/Compliance.type are free-text, validated at
+// the Zod layer against the Config registry (trade.capabilityList,
+// worker.employmentTypeList, worker.statusList, compliance.typeList), mirroring
+// the Tender/Projects CONFIG NOT CODE approach. Worker.capability and
+// ProgramActivity.trade intentionally share trade.capabilityList so the Phase 5
+// demand/supply engine can match them without a translation layer.
+
+model Worker {
+  id             String       @id @default(cuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  name           String
+  phone          String?
+  photoUrl       String?
+  capability     String
+  employmentType String
+  status         String       @default("Available")
+  baseLocation   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  performance WorkerPerformance?
+  compliance  Compliance[]
+  skills      WorkerSkill[]
+  leave       WorkerLeave[]
+
+  @@index([organisationId, capability])
+  @@index([organisationId, status])
+}
+
+// Date-ranged leave, separate from Worker.status (a point-in-time label). The
+// Phase 5 SUPPLY calculation nets a worker out of a week's supply if any
+// WorkerLeave range overlaps that week.
+model WorkerLeave {
+  id             String       @id @default(cuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  workerId       String
+  worker         Worker       @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  startDate      DateTime
+  endDate        DateTime
+  reason         String?
+  createdAt      DateTime     @default(now())
+
+  @@index([organisationId])
+  @@index([workerId, startDate, endDate])
+}
+
+model WorkerPerformance {
+  id           String   @id @default(cuid())
+  workerId     String   @unique
+  worker       Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  quality      Float    @default(0)
+  reliability  Float    @default(0)
+  productivity Float    @default(0)
+  safety       Float    @default(0)
+  updatedAt    DateTime @updatedAt
+}
+
+// status is engine-derived (recomputeAllCompliance), never accepted from the client.
+model Compliance {
+  id             String       @id @default(cuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  workerId       String
+  worker         Worker       @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  type           String
+  reference      String?
+  issuedDate     DateTime?
+  expiryDate     DateTime?
+  docUrl         String?
+  status         String       @default("Valid")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organisationId, status])
+  @@index([workerId])
+  @@index([expiryDate])
+}
+
+model Skill {
+  id             String       @id @default(cuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  name           String
+  createdAt      DateTime     @default(now())
+
+  workerSkills WorkerSkill[]
+
+  @@unique([organisationId, name])
+}
+
+model WorkerSkill {
+  workerId String
+  worker   Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  skillId  String
+  skill    Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  level    Int    @default(1)
+
+  @@id([workerId, skillId])
+}
+
+// ─── Forecast & Capacity ──────────────────────────────────────────────────────
+// One row per org — a persisted cache of the last computed forecast, kept warm
+// by the nightly/on-demand Inngest job and by future Action Centre alerts
+// (Phase 12/13). The live UI always recomputes via lib/forecast on every read,
+// so this snapshot is never the source of truth for what's on screen — only a
+// warm cache for consumers that don't need second-by-second freshness.
+
+model ForecastSnapshot {
+  id              String       @id @default(cuid())
+  organisationId  String       @unique
+  organisation    Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  generatedAt     DateTime
+  blockLengthDays Int
+  weeksOut        Int
+  matrixJson      Json
+  heatmapJson     Json
+  headroomJson    Json
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────

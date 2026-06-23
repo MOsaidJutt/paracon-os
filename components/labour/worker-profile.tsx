@@ -1,0 +1,148 @@
+"use client";
+
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { WorkerFormSheet, type WorkerRow } from "./worker-form-sheet";
+import { WorkerPhotoUpload } from "./worker-photo-upload";
+import { PerformanceRadar, type PerformanceScores } from "./performance-radar";
+import { PerformanceEditor } from "./performance-editor";
+import { ComplianceList, type ComplianceRow } from "./compliance-list";
+import { SkillEditor } from "./skill-editor";
+import { ComplianceBadge } from "./compliance-badge";
+import { AvailabilityCalendar } from "./availability-calendar";
+
+type ApiWorker = WorkerRow & {
+  photoUrl: string | null;
+  performance: PerformanceScores | null;
+  compliance: ComplianceRow[];
+  skills: { skillId: string; level: number; skill: { id: string; name: string } }[];
+};
+
+function statusVariant(status: string): "default" | "secondary" | "outline" {
+  if (status === "Available") return "default";
+  if (status === "Assigned") return "secondary";
+  return "outline";
+}
+
+function ComingSoon({ label }: { label: string }) {
+  return (
+    <Card className="border-dashed">
+      <CardHeader>
+        <CardTitle className="text-base">{label}</CardTitle>
+      </CardHeader>
+      <CardContent className="text-sm text-muted-foreground">Coming in a later phase.</CardContent>
+    </Card>
+  );
+}
+
+export function WorkerProfile({ workerId }: { workerId: string }) {
+  const [editSheetOpen, setEditSheetOpen] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["labour", "worker", workerId],
+    queryFn: async () => {
+      const res = await fetch(`/api/workers/${workerId}`);
+      if (!res.ok) throw new Error("Failed to load worker");
+      return (await res.json()) as { worker: ApiWorker };
+    },
+  });
+
+  if (isLoading || !data) return <p className="text-sm text-muted-foreground">Loading worker...</p>;
+
+  const worker = data.worker;
+  const worstCompliance = worker.compliance.reduce<string>((worst, c) => {
+    const severity: Record<string, number> = { Valid: 0, Expiring: 1, Expired: 2 };
+    return (severity[c.status] ?? 0) > (severity[worst] ?? 0) ? c.status : worst;
+  }, "Valid");
+  const skillLevels = Object.fromEntries(worker.skills.map((s) => [s.skillId, s.level]));
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-4">
+          <WorkerPhotoUpload workerId={worker.id} name={worker.name} photoUrl={worker.photoUrl} />
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">{worker.name}</h1>
+              <Badge variant={statusVariant(worker.status)}>{worker.status}</Badge>
+              <ComplianceBadge status={worstCompliance} expiryDate={null} />
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {worker.capability} &middot; {worker.employmentType}
+              {worker.baseLocation ? ` · ${worker.baseLocation}` : ""}
+              {worker.phone ? ` · ${worker.phone}` : ""}
+            </p>
+          </div>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setEditSheetOpen(true)}>
+          <Pencil className="size-4" />
+          Edit worker
+        </Button>
+      </div>
+
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="compliance">Compliance</TabsTrigger>
+          <TabsTrigger value="skills">Skills</TabsTrigger>
+          <TabsTrigger value="availability">Availability</TabsTrigger>
+          <TabsTrigger value="allocation">Allocation</TabsTrigger>
+          <TabsTrigger value="history">Site History</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="grid gap-4 sm:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Performance</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <PerformanceRadar
+                scores={
+                  worker.performance ?? { quality: 0, reliability: 0, productivity: 0, safety: 0 }
+                }
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Update scores</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <PerformanceEditor
+                workerId={worker.id}
+                initial={worker.performance ?? { quality: 0, reliability: 0, productivity: 0, safety: 0 }}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="compliance">
+          <ComplianceList workerId={worker.id} compliance={worker.compliance} />
+        </TabsContent>
+
+        <TabsContent value="skills">
+          <SkillEditor workerId={worker.id} initialLevels={skillLevels} />
+        </TabsContent>
+
+        <TabsContent value="availability">
+          <AvailabilityCalendar workerId={worker.id} />
+        </TabsContent>
+
+        <TabsContent value="allocation">
+          <ComingSoon label="Current / next allocation" />
+        </TabsContent>
+
+        <TabsContent value="history">
+          <ComingSoon label="Site history" />
+        </TabsContent>
+      </Tabs>
+
+      <WorkerFormSheet open={editSheetOpen} onOpenChange={setEditSheetOpen} worker={worker} />
+    </div>
+  );
+}

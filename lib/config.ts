@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { BadRequestError } from "./errors";
 
 export type ConfigEntry = {
   key: string;
@@ -23,6 +24,13 @@ export async function getConfig<T = unknown>(key: string, organisationId: string
   if (!platformDefault) throw new Error(`No Config row found for key "${key}"`);
 
   return platformDefault.valueJson as T;
+}
+
+/** Shared by every feature's Config-backed validation: asserts a free-text value is one of the allowed options. */
+export function assertInList(value: string, list: string[], field: string): void {
+  if (!list.includes(value)) {
+    throw new BadRequestError(`Invalid ${field} "${value}". Must be one of: ${list.join(", ")}`);
+  }
 }
 
 /** All platform-default keys, each annotated with this org's override (if any). Powers the admin UI. */

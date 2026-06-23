@@ -4,6 +4,7 @@ import { encrypt } from "../lib/crypto";
 import { PERMISSION_GROUPS } from "../lib/permissions";
 import { PERMISSION_LABELS, ROLE_DEFINITIONS, MODULES, CONFIG_DEFAULTS } from "../lib/seed-data";
 import { computeComplianceStatus } from "../lib/labour/compliance";
+import { deriveTenderComputedFields, loadTenderConfig } from "../lib/tenders/config";
 
 const prisma = new PrismaClient();
 
@@ -247,6 +248,123 @@ const DEMO_WORKERS: DemoWorker[] = [
   },
 ];
 
+// Forecast & Capacity demo data (clients, secured projects + program, pipeline
+// tender). Deliberately sized against the 12 DEMO_WORKERS above so the
+// forecast matrix shows a realistic mix: some trades exactly covered (e.g.
+// Site Foreman, Electrician), some short on secured work alone (Plumber has
+// zero supply — Sione is "Assigned" — so any plumbing demand is short), and
+// Carpenter only goes short once the pipeline tender stacks onto the live
+// projects' demand in the later blocks (the vision doc's "stack likely
+// tenders onto live projects" forecasting behaviour).
+
+const DEMO_CLIENTS = ["Meridian Funds Management", "Beacon Cove Developments"] as const;
+
+type DemoActivity = {
+  name: string;
+  trade: string;
+  startOffsetDays: number;
+  endOffsetDays: number;
+  labourRequired: Record<string, number>;
+};
+
+type DemoProject = {
+  name: string;
+  code: string;
+  status: string;
+  value: number;
+  clientName: (typeof DEMO_CLIENTS)[number];
+  startOffsetDays: number;
+  endOffsetDays: number;
+  activities: DemoActivity[];
+};
+
+const DEMO_PROJECTS: DemoProject[] = [
+  {
+    name: "Riverside Quarter Fitout",
+    code: "P26-1001",
+    status: "On Track",
+    value: 850_000,
+    clientName: "Meridian Funds Management",
+    startOffsetDays: 0,
+    endOffsetDays: 84,
+    activities: [
+      { name: "Carpentry fit-out", trade: "Carpenter", startOffsetDays: 0, endOffsetDays: 41, labourRequired: { Carpenter: 2 } },
+      {
+        name: "All-round carpentry support",
+        trade: "All-round Carpenter",
+        startOffsetDays: 0,
+        endOffsetDays: 20,
+        labourRequired: { "All-round Carpenter": 1 },
+      },
+      { name: "Plastering", trade: "Plasterer", startOffsetDays: 21, endOffsetDays: 62, labourRequired: { Plasterer: 1 } },
+      { name: "Electrical rough-in", trade: "Electrician", startOffsetDays: 7, endOffsetDays: 34, labourRequired: { Electrician: 1 } },
+      {
+        name: "Site supervision",
+        trade: "Site Foreman",
+        startOffsetDays: 0,
+        endOffsetDays: 83,
+        labourRequired: { "Site Foreman": 1 },
+      },
+    ],
+  },
+  {
+    name: "Beacon Cove Office Upgrade",
+    code: "P26-1002",
+    status: "Attention",
+    value: 420_000,
+    clientName: "Beacon Cove Developments",
+    startOffsetDays: 14,
+    endOffsetDays: 77,
+    activities: [
+      { name: "Plumbing rough-in", trade: "Plumber", startOffsetDays: 14, endOffsetDays: 48, labourRequired: { Plumber: 2 } },
+      { name: "Painting", trade: "Painter", startOffsetDays: 49, endOffsetDays: 69, labourRequired: { Painter: 2 } },
+      {
+        name: "Carpentry finishing",
+        trade: "Carpenter",
+        startOffsetDays: 42,
+        endOffsetDays: 62,
+        labourRequired: { Carpenter: 1 },
+      },
+    ],
+  },
+];
+
+type DemoTender = {
+  projectName: string;
+  address: string;
+  status: string;
+  winProbabilityText: string;
+  value: number;
+  clientName: (typeof DEMO_CLIENTS)[number];
+  receivedOffsetDays: number;
+  dueOffsetDays: number;
+  submittedOffsetDays: number;
+  expectedStartOffsetDays: number;
+  expectedEndOffsetDays: number;
+  expectedLabour: Record<string, number>;
+  bidDecision: string;
+  intent: string;
+};
+
+const DEMO_TENDERS: DemoTender[] = [
+  {
+    projectName: "Yarra Quarter Stage 2 Fitout",
+    address: "120 Buckhurst Street, South Melbourne VIC 3205",
+    status: "Submitted",
+    winProbabilityText: "High",
+    value: 600_000,
+    clientName: "Meridian Funds Management",
+    receivedOffsetDays: -10,
+    dueOffsetDays: 4,
+    submittedOffsetDays: -2,
+    expectedStartOffsetDays: 56,
+    expectedEndOffsetDays: 83,
+    expectedLabour: { Carpenter: 2, "Site Labourer": 1 },
+    bidDecision: "Go",
+    intent: "Pursue",
+  },
+];
+
 async function main() {
   console.log("Seeding permissions...");
   for (const slug of Object.values(PERMISSION_GROUPS).flat()) {
@@ -463,6 +581,121 @@ async function main() {
         },
       });
     }
+  }
+
+  // Forecast & Capacity demo data — clients, secured projects + program
+  // activities, and a pipeline tender, sized against the workers above so
+  // the forecast matrix (Phase 5) shows a realistic mix of Covered/Short.
+  console.log("Seeding Forecast & Capacity demo data...");
+
+  const clientIdByName = new Map<string, string>();
+  for (const name of DEMO_CLIENTS) {
+    const client = await prisma.client.upsert({
+      where: { organisationId_name: { organisationId: org.id, name } },
+      update: {},
+      create: { organisationId: org.id, name, status: "Pricing" },
+    });
+    clientIdByName.set(name, client.id);
+  }
+
+  for (const demoProject of DEMO_PROJECTS) {
+    const clientId = clientIdByName.get(demoProject.clientName);
+    if (!clientId) throw new Error(`Unknown demo client "${demoProject.clientName}"`);
+
+    const project = await prisma.project.upsert({
+      where: { organisationId_code: { organisationId: org.id, code: demoProject.code } },
+      update: {
+        name: demoProject.name,
+        status: demoProject.status,
+        value: demoProject.value,
+        clientId,
+        startDate: daysFromNow(demoProject.startOffsetDays),
+        endDate: daysFromNow(demoProject.endOffsetDays),
+      },
+      create: {
+        organisationId: org.id,
+        name: demoProject.name,
+        code: demoProject.code,
+        status: demoProject.status,
+        value: demoProject.value,
+        clientId,
+        startDate: daysFromNow(demoProject.startOffsetDays),
+        endDate: daysFromNow(demoProject.endOffsetDays),
+      },
+    });
+
+    for (const demoActivity of demoProject.activities) {
+      const existingActivity = await prisma.programActivity.findFirst({
+        where: { projectId: project.id, name: demoActivity.name },
+      });
+      const activityData = {
+        organisationId: org.id,
+        projectId: project.id,
+        name: demoActivity.name,
+        trade: demoActivity.trade,
+        startDate: daysFromNow(demoActivity.startOffsetDays),
+        endDate: daysFromNow(demoActivity.endOffsetDays),
+        status: "On Track",
+        labourRequired: demoActivity.labourRequired,
+      };
+      if (existingActivity) {
+        await prisma.programActivity.update({ where: { id: existingActivity.id }, data: activityData });
+      } else {
+        await prisma.programActivity.create({ data: activityData });
+      }
+    }
+  }
+
+  const tenderConfig = await loadTenderConfig(org.id);
+  for (const demoTender of DEMO_TENDERS) {
+    const clientId = clientIdByName.get(demoTender.clientName);
+    if (!clientId) throw new Error(`Unknown demo client "${demoTender.clientName}"`);
+
+    const received = daysFromNow(demoTender.receivedOffsetDays);
+    const due = daysFromNow(demoTender.dueOffsetDays);
+    const computed = deriveTenderComputedFields(
+      { value: demoTender.value, winProbabilityText: demoTender.winProbabilityText, received, due },
+      tenderConfig
+    );
+
+    await prisma.tender.upsert({
+      where: {
+        organisationId_projectName_clientId: { organisationId: org.id, projectName: demoTender.projectName, clientId },
+      },
+      update: {
+        address: demoTender.address,
+        status: demoTender.status,
+        received,
+        due,
+        submitted: daysFromNow(demoTender.submittedOffsetDays),
+        value: demoTender.value,
+        winProbabilityText: demoTender.winProbabilityText,
+        bidDecision: demoTender.bidDecision,
+        intent: demoTender.intent,
+        expectedStart: daysFromNow(demoTender.expectedStartOffsetDays),
+        expectedEnd: daysFromNow(demoTender.expectedEndOffsetDays),
+        expectedLabour: demoTender.expectedLabour,
+        ...computed,
+      },
+      create: {
+        organisationId: org.id,
+        projectName: demoTender.projectName,
+        address: demoTender.address,
+        status: demoTender.status,
+        received,
+        due,
+        submitted: daysFromNow(demoTender.submittedOffsetDays),
+        value: demoTender.value,
+        clientId,
+        winProbabilityText: demoTender.winProbabilityText,
+        bidDecision: demoTender.bidDecision,
+        intent: demoTender.intent,
+        expectedStart: daysFromNow(demoTender.expectedStartOffsetDays),
+        expectedEnd: daysFromNow(demoTender.expectedEndOffsetDays),
+        expectedLabour: demoTender.expectedLabour,
+        ...computed,
+      },
+    });
   }
 
   // Platform org — hosts the Super Admin account, kept separate from any

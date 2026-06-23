@@ -5,6 +5,7 @@ import { auditLog } from "@/lib/audit";
 import { toErrorResponse } from "@/lib/api-error";
 import { createTenderSchema, listTendersQuerySchema } from "@/lib/validations/tender";
 import { assertInList, deriveTenderComputedFields, loadTenderConfig } from "@/lib/tenders/config";
+import { sendEvent } from "@/lib/inngest/send-safe";
 
 export async function GET(req: NextRequest) {
   try {
@@ -34,6 +35,7 @@ export async function GET(req: NextRequest) {
       include: {
         client: { select: { id: true, name: true } },
         contact: { select: { id: true, name: true } },
+        project: { select: { id: true, code: true } },
       },
     });
 
@@ -107,6 +109,7 @@ export async function POST(req: NextRequest) {
       entityId: tender.id,
       after: { projectName: tender.projectName, status: tender.status, value: tender.value },
     });
+    await sendEvent("forecast/recompute.requested");
 
     return NextResponse.json({ tender }, { status: 201 });
   } catch (error) {
