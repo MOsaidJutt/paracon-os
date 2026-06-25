@@ -658,6 +658,16 @@ async function main() {
     clientIdByName.set(name, client.id);
   }
 
+  // Every demo project is assigned to the seeded PM (the org chart's "PM runs
+  // 5-6 projects") so the Phase 12 PM dashboard has real data to show, and to
+  // the seeded foreman so /api/site/today resolves a project with zero taps.
+  const pmUser = await prisma.user.findFirstOrThrow({
+    where: { organisationId: org.id, email: "pm@paracon.com.au" },
+  });
+  const foremanUser = await prisma.user.findFirstOrThrow({
+    where: { organisationId: org.id, email: "foreman@paracon.com.au" },
+  });
+
   const projectIdByCode = new Map<string, string>();
   for (const demoProject of DEMO_PROJECTS) {
     const clientId = clientIdByName.get(demoProject.clientName);
@@ -672,6 +682,8 @@ async function main() {
         clientId,
         startDate: daysFromNow(demoProject.startOffsetDays),
         endDate: daysFromNow(demoProject.endOffsetDays),
+        pmUserId: pmUser.id,
+        foremanUserId: foremanUser.id,
       },
       create: {
         organisationId: org.id,
@@ -682,6 +694,8 @@ async function main() {
         clientId,
         startDate: daysFromNow(demoProject.startOffsetDays),
         endDate: daysFromNow(demoProject.endOffsetDays),
+        pmUserId: pmUser.id,
+        foremanUserId: foremanUser.id,
       },
     });
 
@@ -1001,9 +1015,6 @@ async function main() {
   // "Plasterboard sheets" Pending delivery above — so the live demo shows
   // the foreman completing a real day's update from a blank slate.
   console.log("Seeding Foreman Mobile demo data...");
-  const foremanUser = await prisma.user.findFirstOrThrow({
-    where: { organisationId: org.id, email: "foreman@paracon.com.au" },
-  });
   await prisma.project.update({ where: { id: docDemoProject.id }, data: { foremanUserId: foremanUser.id } });
 
   const carpentryActivity = await prisma.programActivity.findFirstOrThrow({

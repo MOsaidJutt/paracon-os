@@ -533,6 +533,7 @@ model Project {
   @@unique([organisationId, code])
   @@index([organisationId, status])
   @@index([organisationId, clientId])
+  @@index([organisationId, pmUserId])
 }
 
 model ProgramActivity {

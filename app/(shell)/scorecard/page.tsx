@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { ScorecardDashboard } from "@/components/scorecard/scorecard-dashboard";
+import { StaffScorecardPanel } from "@/components/scorecard/staff-scorecard-panel";
 
 export default async function ScorecardPage() {
   const session = await auth();
@@ -14,7 +14,7 @@ export default async function ScorecardPage() {
           incentive program.
         </p>
       </div>
-      <ScorecardDashboard canAssess={canAssess} />
+      <StaffScorecardPanel canAssess={canAssess} />
     </div>
   );
 }

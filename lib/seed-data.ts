@@ -109,7 +109,6 @@ export const ROLE_DEFINITIONS = [
       "project.view",
       "tender.view",
       "forecast.view",
-      "dashboard.pm",
       "doc.view",
       "finance.view",
       "scorecard.view",
@@ -663,5 +662,49 @@ export const CONFIG_DEFAULTS = [
     label: "Site photo tags",
     description: "Tag options for a photo attached to a foreman daily update.",
     valueJson: ["Progress", "Delivery", "Issue", "Other"],
+  },
+  {
+    key: "dashboard.health.attentionMilestoneWindowDays",
+    group: "dashboard",
+    type: "NUMBER" as const,
+    label: "Project health — attention window (days)",
+    description:
+      "A project's nearest upcoming critical milestone inside this many days (and not already overdue) flags the project Attention on the Director/PM dashboards.",
+    valueJson: 10,
+  },
+  {
+    key: "dashboard.health.criticalIssueSeverities",
+    group: "dashboard",
+    type: "LIST" as const,
+    label: "Project health — critical issue severities",
+    description:
+      "An open site issue at one of these severities (site.issueSeverityList values) flags the project Critical rather than Attention.",
+    valueJson: ["High"],
+  },
+  {
+    key: "dashboard.health.shortageWatchWeeks",
+    group: "dashboard",
+    type: "NUMBER" as const,
+    label: "Project health — labour shortage watch window (weeks)",
+    description:
+      "A negative labour gap (demand over allocated) for a project inside this many weeks flags it Attention; a shortage in the current week flags it Critical.",
+    valueJson: 2,
+  },
+  {
+    key: "scorecard.gauge.goodThreshold",
+    group: "scorecard",
+    type: "NUMBER" as const,
+    label: "Scorecard gauge — good threshold",
+    description: "A staff scorecard's overall score (0-100) at or above this value renders the gauge in the RAG-green band.",
+    valueJson: 80,
+  },
+  {
+    key: "scorecard.gauge.warningThreshold",
+    group: "scorecard",
+    type: "NUMBER" as const,
+    label: "Scorecard gauge — warning threshold",
+    description:
+      "A staff scorecard's overall score at or above this value (but below the good threshold) renders the gauge in the RAG-amber band; below it renders RAG-red.",
+    valueJson: 60,
   },
 ];

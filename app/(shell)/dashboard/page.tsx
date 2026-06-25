@@ -4,18 +4,10 @@ import { getTenantContext } from "@/lib/tenant";
 import { filterUpcomingMilestones } from "@/lib/projects/calculations";
 import { formatDate } from "@/lib/tenders/format";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DirectorDashboard } from "@/components/dashboard/director-dashboard";
+import { PmDashboard } from "@/components/dashboard/pm-dashboard";
 
 const ROLE_COPY: Record<string, { title: string; description: string }> = {
-  director: {
-    title: "Command Centre",
-    description:
-      "Project health, critical dates, labour shortages and capacity will surface here once Phase 5 lands.",
-  },
-  "project-manager": {
-    title: "Program & Labour Overview",
-    description:
-      "Your programs, weekly labour requirements and allocation gaps will surface here once Phase 3–6 land.",
-  },
   estimator: {
     title: "Tender Pipeline",
     description: "The tender register and weighted pipeline KPIs land in Phase 2.",
@@ -31,9 +23,40 @@ export default async function DashboardPage() {
   const role = session?.user?.role ?? "viewer";
   // Zero-tap landing: a foreman's whole job here is the mobile daily update, not a dashboard.
   if (role === "site-foreman") redirect("/site");
-  const copy = ROLE_COPY[role] ?? ROLE_COPY.viewer;
 
-  const canViewProjects = session?.user?.permissions.includes("project.view") ?? false;
+  const permissions = session?.user?.permissions ?? [];
+  const canAssessScorecard = permissions.includes("scorecard.assess");
+
+  if (permissions.includes("dashboard.director")) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div>
+          <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">Command Centre</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Project health, critical dates, labour capacity and pipeline — everything a director needs in one screen.
+          </p>
+        </div>
+        <DirectorDashboard canAssessScorecard={canAssessScorecard} />
+      </div>
+    );
+  }
+
+  if (permissions.includes("dashboard.pm")) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div>
+          <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">PM Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Your projects&apos; look-ahead, labour balance, deliveries and open issues.
+          </p>
+        </div>
+        <PmDashboard canAssessScorecard={canAssessScorecard} />
+      </div>
+    );
+  }
+
+  const copy = ROLE_COPY[role] ?? ROLE_COPY.viewer;
+  const canViewProjects = permissions.includes("project.view");
   const upcomingMilestones = canViewProjects
     ? filterUpcomingMilestones(
         await getTenantContext(session!.user.organisationId).milestone.findMany({
