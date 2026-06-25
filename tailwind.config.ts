@@ -14,17 +14,18 @@ const config: Config = {
   			heading: ['var(--font-jakarta)', 'sans-serif'],
   		},
   		colors: {
-  			ink: '#1C1B17',
-  			paper: '#FAF9F6',
+  			ink: '#222323',
+  			paper: '#f4f3f0',
+  			tan: '#ddc8b8',
   			brass: {
-  				DEFAULT: '#B08D57',
-  				// Darkened for text-on-tint use in light mode — #B08D57 text on
-  				// its own /15 tint fails WCAG AA (2.56:1); this passes (6.1:1).
-  				deep: '#6E502A',
-  				// Lightened for text-on-tint use in dark mode — the /15 tint sits
-  				// on a near-black surface there, so a darkened variant would fail;
-  				// this passes 6.04:1 against the same tint over the dark surface.
-  				light: '#bd9f72',
+  				// Real brand brown per the 2025 brand guide (was a #B08D57 gold placeholder).
+  				DEFAULT: '#6b4f43',
+  				// Darkened for text-on-tint use in light mode — rebased on the real
+  				// brown above; passes WCAG AAA (9.26:1) on its own /15 tint over paper.
+  				deep: '#432d20',
+  				// Lightened for text-on-tint use in dark mode — rebased on the real
+  				// brown above; passes WCAG AAA (7.46:1) on its own /15 tint over ink.
+  				light: '#d2b6a8',
   			},
   			rag: {
   				green: '#2E7D32',
