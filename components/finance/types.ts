@@ -1,0 +1,21 @@
+export type SupplierBillRow = {
+  id: string;
+  invoiceNumber: string | null;
+  invoiceDate: string | null;
+  amountExGst: number;
+  gstAmount: number;
+  amountIncGst: number;
+  jobNumberRaw: string | null;
+  allocationStatus: string;
+  status: string;
+  orderedConfirmed: boolean;
+  receivedConfirmed: boolean;
+  quantityConfirmed: boolean;
+  priceConfirmed: boolean;
+  reviewNote: string | null;
+  source: string;
+  supplierNameRaw: string | null;
+  project: { id: string; name: string; code: string } | null;
+  supplier: { id: string; company: string } | null;
+  po: { id: string; number: string; value: number } | null;
+};
