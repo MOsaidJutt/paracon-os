@@ -2,11 +2,10 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// TEMPORARY: swapped to sqlite for a local client demo with zero external setup.
-// Swap back to postgresql + DATABASE_URL_UNPOOLED before continuing real development.
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 // ─── Tenancy ──────────────────────────────────────────────────────────────────
@@ -65,6 +64,8 @@ model Organisation {
   allocations         Allocation[]
   dailySiteUpdates    DailySiteUpdate[]
   issues              Issue[]
+  staffScores         StaffScore[]
+  productivityRecords ProductivityRecord[]
 }
 
 // ─── Documents & Templates engine ────────────────────────────────────────────
@@ -191,6 +192,7 @@ model User {
   foremanProjects           Project[]           @relation("ProjectForeman")
   dailySiteUpdatesAsForeman DailySiteUpdate[]   @relation("DailySiteUpdateForeman")
   issuesRaised              Issue[]             @relation("IssueRaisedBy")
+  staffScoresAssessed       StaffScore[]        @relation("StaffScoreAssessedBy")
 
   @@unique([organisationId, email])
   @@index([roleId])
@@ -331,6 +333,7 @@ enum ConfigType {
   WEIGHTS
   BANDS
   TEXT
+  METRICS
 }
 
 model Config {
@@ -512,19 +515,20 @@ model Project {
   activities ProgramActivity[]
   milestones Milestone[]
 
-  storedFiles        StoredFile[]
-  linkedDocuments    LinkedDocument[]
-  estimateLineItems  EstimateLineItem[]
-  generatedDocuments GeneratedDocument[]
-  purchaseOrders     PurchaseOrder[]
-  deliveries         Delivery[]
-  supplierBills      SupplierBill[]
-  variations         Variation[]
-  progressClaims     ProgressClaim[]
-  retentionReleases  RetentionRelease[]
-  allocations        Allocation[]
-  dailySiteUpdates   DailySiteUpdate[]
-  issues             Issue[]
+  storedFiles         StoredFile[]
+  linkedDocuments     LinkedDocument[]
+  estimateLineItems   EstimateLineItem[]
+  generatedDocuments  GeneratedDocument[]
+  purchaseOrders      PurchaseOrder[]
+  deliveries          Delivery[]
+  supplierBills       SupplierBill[]
+  variations          Variation[]
+  progressClaims      ProgressClaim[]
+  retentionReleases   RetentionRelease[]
+  allocations         Allocation[]
+  dailySiteUpdates    DailySiteUpdate[]
+  issues              Issue[]
+  productivityRecords ProductivityRecord[]
 
   @@unique([organisationId, code])
   @@index([organisationId, status])
@@ -594,6 +598,9 @@ model Worker {
   employmentType String
   status         String       @default("Available")
   baseLocation   String?
+  // Decides eligibility for the monthly Staff Scorecard (foremen, lead
+  // carpenters, etc.) — set by a Director/PM, not every worker is assessed.
+  isKeyStaff     Boolean      @default(false)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -604,6 +611,7 @@ model Worker {
   storedFiles StoredFile[]
   allocations Allocation[]
   attendances Attendance[]
+  staffScores StaffScore[]
 
   @@index([organisationId, capability])
   @@index([organisationId, status])
@@ -1198,6 +1206,71 @@ model MailboxSetting {
   updatedBy         String?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
+}
+
+// ─── Productivity & Staff Scorecard (Phase 11) ───────────────────────────────
+// trade is free-text from the shared trade.capabilityList vocabulary (same as
+// Worker.capability/ProgramActivity.trade) — one row per project+trade+month,
+// recomputed by lib/scorecard/productivity-service.ts from ProgramActivity
+// (planned hours) and Attendance (actual hours). plannedHoursShare is this
+// trade's share of the PROJECT's total planned hours that month; costPerHour
+// allocates Project.value by that share and divides by actualHours — an
+// approximate $/labour-hour benchmark (NOT a literal $/m² rate, since the
+// trade-package list and worker capability list are different vocabularies
+// per the intake notes' gap #6), used to feed historical $/hour-by-trade back
+// into estimating a new tender's expected labour.
+model ProductivityRecord {
+  id                String       @id @default(cuid())
+  organisationId    String
+  organisation      Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  projectId         String
+  project           Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  trade             String
+  periodStart       DateTime
+  periodEnd         DateTime
+  plannedHours      Float        @default(0)
+  actualHours       Float        @default(0)
+  outputRatio       Float?
+  attendanceDays    Int          @default(0)
+  expectedDays      Int          @default(0)
+  reliabilityPct    Float?
+  plannedHoursShare Float?
+  costPerHour       Float?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@unique([organisationId, projectId, trade, periodStart])
+  @@index([organisationId, trade, periodStart])
+  @@index([organisationId, projectId, periodStart])
+}
+
+// One row per key-staff worker per calendar month — metricScoresJson holds
+// the raw 0..scaleMax score per Config-driven metric key (scorecard.metrics);
+// overallScore is the weighted result snapshotted at save time so a later
+// admin change to the metric weights never reshapes a past month's score
+// (mirrors RetentionRelease/ProgressClaim's snapshot-at-decision pattern).
+// lockedAt makes the month immutable (lib/scorecard/calc.ts#assertScoreEditable);
+// history (one row per period, never overwritten across months) is the seam
+// a future incentive program reads from — no payout logic here.
+model StaffScore {
+  id               String       @id @default(cuid())
+  organisationId   String
+  organisation     Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  workerId         String
+  worker           Worker       @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  period           DateTime
+  metricScoresJson Json
+  overallScore     Float        @default(0)
+  assessedByUserId String?
+  assessedBy       User?        @relation("StaffScoreAssessedBy", fields: [assessedByUserId], references: [id], onDelete: SetNull)
+  lockedAt         DateTime?
+  note             String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@unique([organisationId, workerId, period])
+  @@index([organisationId, period])
+  @@index([workerId])
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────
