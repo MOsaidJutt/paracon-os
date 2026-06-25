@@ -5,6 +5,7 @@ export const configValueSchemas = {
   NUMBER: z.number(),
   WEIGHTS: z.record(z.string(), z.number()),
   BANDS: z.array(z.object({ label: z.string().min(1), max: z.number().nullable() })),
+  TEXT: z.string(),
 } as const;
 
 export type ConfigType = keyof typeof configValueSchemas;

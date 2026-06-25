@@ -15,6 +15,7 @@ import { ComplianceList, type ComplianceRow } from "./compliance-list";
 import { SkillEditor } from "./skill-editor";
 import { ComplianceBadge } from "./compliance-badge";
 import { AvailabilityCalendar } from "./availability-calendar";
+import { WorkerAllocations } from "./worker-allocations";
 
 type ApiWorker = WorkerRow & {
   photoUrl: string | null;
@@ -134,7 +135,7 @@ export function WorkerProfile({ workerId }: { workerId: string }) {
         </TabsContent>
 
         <TabsContent value="allocation">
-          <ComingSoon label="Current / next allocation" />
+          <WorkerAllocations workerId={worker.id} />
         </TabsContent>
 
         <TabsContent value="history">

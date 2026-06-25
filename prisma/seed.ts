@@ -4,7 +4,11 @@ import { encrypt } from "../lib/crypto";
 import { PERMISSION_GROUPS } from "../lib/permissions";
 import { PERMISSION_LABELS, ROLE_DEFINITIONS, MODULES, CONFIG_DEFAULTS } from "../lib/seed-data";
 import { computeComplianceStatus } from "../lib/labour/compliance";
+import { startOfIsoWeek } from "../lib/dates";
 import { deriveTenderComputedFields, loadTenderConfig } from "../lib/tenders/config";
+import { defaultDocumentTemplateConfig } from "../lib/documents/templates-config";
+import { calcRetentionForClaim } from "../lib/finance/retention";
+import type { VariationSnapshot, ProgressClaimSnapshot } from "../lib/documents/types";
 
 const prisma = new PrismaClient();
 
@@ -329,6 +333,25 @@ const DEMO_PROJECTS: DemoProject[] = [
   },
 ];
 
+// Phase 9 Resource Planner demo allocations — deliberately NOT a 1:1 cover of
+// every trade's requirement, so the planner shows a realistic mix on first
+// load: Site Foreman / All-round Carpenter / Electrician / Plasterer fully
+// covered; Carpenter on Riverside short by 1 (Liam Foster is on leave, so
+// only Jacob Ferreira is allocated against a requirement of 2); Painter on
+// Beacon Cove short by 1 (only one Painter exists); and Plumber on Beacon
+// Cove left at zero on purpose — Sione Taufa is the only Plumber but his EWP
+// ticket is expired, so the compliance guard blocks him from ever appearing
+// here, demonstrating the block rather than just unit-testing it.
+const DEMO_ALLOCATIONS: { projectCode: string; workerName: string; weekOffsetDays: number[] }[] = [
+  { projectCode: "P26-1001", workerName: "Marcus Webb", weekOffsetDays: [0, 7, 14] },
+  { projectCode: "P26-1001", workerName: "Jacob Ferreira", weekOffsetDays: [0, 7, 14] },
+  { projectCode: "P26-1001", workerName: "Tane Williams", weekOffsetDays: [0, 7, 14] },
+  { projectCode: "P26-1001", workerName: "Priya Nair", weekOffsetDays: [7, 14] },
+  { projectCode: "P26-1001", workerName: "Grace Halloran", weekOffsetDays: [21, 28] },
+  { projectCode: "P26-1002", workerName: "Owen Fitzgerald", weekOffsetDays: [49, 56] },
+  { projectCode: "P26-1002", workerName: "Jacob Ferreira", weekOffsetDays: [42, 49] },
+];
+
 type DemoTender = {
   projectName: string;
   address: string;
@@ -380,11 +403,20 @@ async function main() {
 
   const org = await prisma.organisation.upsert({
     where: { slug: "paracon" },
-    update: {},
+    update: {
+      legalName: "Paracon Group Pty Ltd",
+      abn: "80 317 795 082",
+      registeredAddress: "Unit 10/65 Mark Street, North Melbourne VIC 3051",
+    },
     create: {
       name: "Paracon Group",
       slug: "paracon",
       primaryColor: "#B08D57",
+      // Current legal entity (CLAUDE.md rule 14) — the legacy templates in the
+      // source Drive data still carry the retired ABN (42 166 362 625).
+      legalName: "Paracon Group Pty Ltd",
+      abn: "80 317 795 082",
+      registeredAddress: "Unit 10/65 Mark Street, North Melbourne VIC 3051",
     },
   });
 
@@ -501,6 +533,23 @@ async function main() {
     }
   }
 
+  // Documents & Templates engine — org-level generation config (scope-builder
+  // library, qualifications boilerplate, PDF colour tokens). CONFIG NOT CODE:
+  // these rows are what the admin Document Templates screen edits; the
+  // generators always read from here, never from a hard-coded constant.
+  console.log("Seeding Document Templates...");
+  for (const type of ["TENDER_LETTER", "VARIATION", "PROGRESS_CLAIM"] as const) {
+    await prisma.documentTemplate.upsert({
+      where: { organisationId_type: { organisationId: org.id, type } },
+      update: {},
+      create: {
+        organisationId: org.id,
+        type,
+        configJson: defaultDocumentTemplateConfig(type),
+      },
+    });
+  }
+
   // Labour Intelligence demo data (workers, skills, compliance, leave)
   console.log("Seeding Labour Intelligence demo data...");
 
@@ -514,6 +563,7 @@ async function main() {
     skillIdByName.set(name, skill.id);
   }
 
+  const workerIdByName = new Map<string, string>();
   for (const demoWorker of DEMO_WORKERS) {
     const existingWorker = await prisma.worker.findFirst({ where: { organisationId: org.id, name: demoWorker.name } });
     const worker = existingWorker
@@ -581,6 +631,8 @@ async function main() {
         },
       });
     }
+
+    workerIdByName.set(demoWorker.name, worker.id);
   }
 
   // Forecast & Capacity demo data — clients, secured projects + program
@@ -598,6 +650,7 @@ async function main() {
     clientIdByName.set(name, client.id);
   }
 
+  const projectIdByCode = new Map<string, string>();
   for (const demoProject of DEMO_PROJECTS) {
     const clientId = clientIdByName.get(demoProject.clientName);
     if (!clientId) throw new Error(`Unknown demo client "${demoProject.clientName}"`);
@@ -643,6 +696,27 @@ async function main() {
       } else {
         await prisma.programActivity.create({ data: activityData });
       }
+    }
+
+    projectIdByCode.set(demoProject.code, project.id);
+  }
+
+  // Phase 9 Resource Planner demo allocations — see DEMO_ALLOCATIONS for the
+  // deliberate covered/short/blocked mix. Cleared and recreated on every seed
+  // run for determinism, same as compliance/leave above.
+  console.log("Seeding Resource Planner demo allocations...");
+  await prisma.allocation.deleteMany({ where: { organisationId: org.id } });
+  for (const demoAllocation of DEMO_ALLOCATIONS) {
+    const projectId = projectIdByCode.get(demoAllocation.projectCode);
+    if (!projectId) throw new Error(`Unknown demo project "${demoAllocation.projectCode}"`);
+    const workerId = workerIdByName.get(demoAllocation.workerName);
+    if (!workerId) throw new Error(`Unknown demo worker "${demoAllocation.workerName}"`);
+
+    const weekStarts = new Set(demoAllocation.weekOffsetDays.map((offset) => startOfIsoWeek(daysFromNow(offset)).getTime()));
+    for (const weekStartMs of weekStarts) {
+      await prisma.allocation.create({
+        data: { organisationId: org.id, workerId, projectId, weekStart: new Date(weekStartMs) },
+      });
     }
   }
 
@@ -697,6 +771,499 @@ async function main() {
       },
     });
   }
+
+  // Document Management + Import Centre demo data — a representative mix of
+  // stored files and Drive links across both a project and a tender, so the
+  // unified Documents panel doesn't look empty in the demo. Object keys are
+  // placeholders (no demo bytes are pushed to real storage); LinkedDocument
+  // never needs storage at all — it's just a saved URL + metadata.
+  console.log("Seeding Document Management demo data...");
+
+  const docDemoProject = await prisma.project.update({
+    where: { organisationId_code: { organisationId: org.id, code: "P26-1001" } },
+    data: {
+      tradePackages: [
+        { name: "Partitions", contractValue: 510_000 },
+        { name: "Doors", contractValue: 145_000 },
+        { name: "Ceiling", contractValue: 195_000 },
+      ],
+    },
+  });
+  const docDemoTender = await prisma.tender.findFirstOrThrow({
+    where: { organisationId: org.id, projectName: "Yarra Quarter Stage 2 Fitout" },
+  });
+  await prisma.tender.update({
+    where: { id: docDemoTender.id },
+    data: {
+      tradePackages: [
+        { name: "Partitions", contractValue: 0 },
+        { name: "Doors", contractValue: 0 },
+        { name: "Ceiling", contractValue: 0 },
+      ],
+    },
+  });
+
+  const demoStoredFiles: {
+    name: string;
+    mime: string;
+    size: number;
+    category: string;
+    projectId?: string;
+    tenderId?: string;
+  }[] = [
+    {
+      name: "Riverside Quarter Invoice Proforma.xlsx",
+      mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      size: 48_000,
+      category: "Submission, Contract & Claims",
+      projectId: docDemoProject.id,
+    },
+    {
+      name: "VQ-01 Day Labour Works.xlsx",
+      mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      size: 22_000,
+      category: "Submission, Contract & Claims",
+      projectId: docDemoProject.id,
+    },
+    {
+      name: "General Fitout SWMS 001.pdf",
+      mime: "application/pdf",
+      size: 1_240_000,
+      category: "Site File",
+      projectId: docDemoProject.id,
+    },
+    {
+      name: "Preliminary Pricing Pack.pdf",
+      mime: "application/pdf",
+      size: 860_000,
+      category: "Documentation",
+      tenderId: docDemoTender.id,
+    },
+  ];
+
+  for (const file of demoStoredFiles) {
+    const existing = await prisma.storedFile.findFirst({
+      where: {
+        organisationId: org.id,
+        name: file.name,
+        projectId: file.projectId ?? null,
+        tenderId: file.tenderId ?? null,
+      },
+    });
+    if (existing) continue;
+    const scope = file.projectId ? `projects/${file.projectId}` : `tenders/${file.tenderId}`;
+    await prisma.storedFile.create({
+      data: {
+        organisationId: org.id,
+        key: `seed/${scope}/${file.name}`,
+        name: file.name,
+        mime: file.mime,
+        size: file.size,
+        category: file.category,
+        projectId: file.projectId,
+        tenderId: file.tenderId,
+      },
+    });
+  }
+
+  const demoLinkedDocs: { name: string; driveUrl: string; kind: string; projectId?: string; tenderId?: string }[] = [
+    {
+      name: "Architectural Drawing Set (I---0000…I---7010)",
+      driveUrl: "https://drive.google.com/drive/folders/1A2B3C4D5E6F-demo-riverside-drawings",
+      kind: "Drawing Set",
+      projectId: docDemoProject.id,
+    },
+    {
+      name: "Trade Breakdown.xlsx",
+      driveUrl: "https://drive.google.com/file/d/1G7H8I9J0K-demo-yarra-breakdown/view",
+      kind: "Other",
+      tenderId: docDemoTender.id,
+    },
+  ];
+
+  for (const doc of demoLinkedDocs) {
+    const existing = await prisma.linkedDocument.findFirst({
+      where: { organisationId: org.id, name: doc.name, projectId: doc.projectId ?? null, tenderId: doc.tenderId ?? null },
+    });
+    if (existing) continue;
+    await prisma.linkedDocument.create({
+      data: {
+        organisationId: org.id,
+        name: doc.name,
+        driveUrl: doc.driveUrl,
+        kind: doc.kind,
+        projectId: doc.projectId,
+        tenderId: doc.tenderId,
+      },
+    });
+  }
+
+  const demoEstimateLineItems: {
+    description: string;
+    quantity: number;
+    unit: string;
+    unitRate: number;
+    amount: number;
+    projectId?: string;
+    tenderId?: string;
+  }[] = [
+    { description: "Solid Partition - P1", quantity: 84, unit: "lm", unitRate: 145, amount: 12_180, projectId: docDemoProject.id },
+    { description: "Glass Partition - G1", quantity: 22, unit: "lm", unitRate: 310, amount: 6_820, projectId: docDemoProject.id },
+    { description: "Suspended Ceiling - PB3", quantity: 310, unit: "m2", unitRate: 58, amount: 17_980, tenderId: docDemoTender.id },
+  ];
+
+  for (const item of demoEstimateLineItems) {
+    const existing = await prisma.estimateLineItem.findFirst({
+      where: {
+        organisationId: org.id,
+        description: item.description,
+        projectId: item.projectId ?? null,
+        tenderId: item.tenderId ?? null,
+      },
+    });
+    if (existing) continue;
+    await prisma.estimateLineItem.create({
+      data: {
+        organisationId: org.id,
+        description: item.description,
+        quantity: item.quantity,
+        unit: item.unit,
+        unitRate: item.unitRate,
+        amount: item.amount,
+        projectId: item.projectId,
+        tenderId: item.tenderId,
+        source: "zztakeoff",
+      },
+    });
+  }
+
+  // Project Financials & Invoice Review demo data (Phase 8) — suppliers, POs,
+  // deliveries, a mix of supplier bills across the review pipeline (incl. one
+  // in the Unallocated tray), and a Variation + Progress Claim wrapping
+  // placeholder Phase 7 documents, so the Financials tab and Finance hub look
+  // real on first run without needing a live mailbox or generated PDFs.
+  console.log("Seeding Project Financials demo data...");
+
+  await prisma.project.update({ where: { id: docDemoProject.id }, data: { costBudget: 740_000 } });
+
+  const demoSuppliers = [
+    { trade: "Aluminium", company: "Steel & Glass Co", email: "accounts@steelandglass.example" },
+    { trade: "Hardware (Standard)", company: "BuildRight Hardware", email: "billing@buildright.example" },
+  ];
+  const supplierIdByCompany = new Map<string, string>();
+  for (const s of demoSuppliers) {
+    const existingSupplier = await prisma.supplier.findFirst({ where: { organisationId: org.id, company: s.company } });
+    const supplier = existingSupplier
+      ? await prisma.supplier.update({ where: { id: existingSupplier.id }, data: { trade: s.trade, email: s.email } })
+      : await prisma.supplier.create({ data: { organisationId: org.id, trade: s.trade, company: s.company, email: s.email } });
+    supplierIdByCompany.set(s.company, supplier.id);
+  }
+  const steelGlassId = supplierIdByCompany.get("Steel & Glass Co")!;
+  const buildRightId = supplierIdByCompany.get("BuildRight Hardware")!;
+
+  async function upsertPo(number: string, supplierId: string, value: number, status: string, expectedOffsetDays: number) {
+    const existing = await prisma.purchaseOrder.findFirst({ where: { organisationId: org.id, projectId: docDemoProject.id, number } });
+    const data = { organisationId: org.id, projectId: docDemoProject.id, supplierId, number, value, status, expectedDate: daysFromNow(expectedOffsetDays) };
+    return existing ? prisma.purchaseOrder.update({ where: { id: existing.id }, data }) : prisma.purchaseOrder.create({ data });
+  }
+  const po1 = await upsertPo("PO-01", steelGlassId, 65_000, "Ordered", 14);
+  const po2 = await upsertPo("PO-02", buildRightId, 22_000, "Delivered", -5);
+
+  async function upsertDelivery(poId: string | null, supplierId: string | null, status: string, deliveredOffsetDays: number | null, description: string) {
+    const existing = await prisma.delivery.findFirst({ where: { organisationId: org.id, projectId: docDemoProject.id, poId } });
+    const data = {
+      organisationId: org.id,
+      projectId: docDemoProject.id,
+      poId,
+      supplierId,
+      status,
+      deliveredDate: deliveredOffsetDays != null ? daysFromNow(deliveredOffsetDays) : null,
+      itemsJson: [{ description }],
+    };
+    return existing ? prisma.delivery.update({ where: { id: existing.id }, data }) : prisma.delivery.create({ data });
+  }
+  await upsertDelivery(po2.id, buildRightId, "Delivered", -3, "Door hardware sets");
+  await upsertDelivery(null, null, "Pending", null, "Plasterboard sheets");
+
+  // Phase 10 Foreman Mobile demo data — Frank Foreman assigned to Riverside
+  // (docDemoProject, code P26-1001), with yesterday's update fully submitted
+  // (crew + a task tick + an issue) so the Site updates/Issues tabs aren't
+  // empty AND the mobile /site flow has something to suggest "yesterday's
+  // crew" from. Today is deliberately left untouched — including the
+  // "Plasterboard sheets" Pending delivery above — so the live demo shows
+  // the foreman completing a real day's update from a blank slate.
+  console.log("Seeding Foreman Mobile demo data...");
+  const foremanUser = await prisma.user.findFirstOrThrow({
+    where: { organisationId: org.id, email: "foreman@paracon.com.au" },
+  });
+  await prisma.project.update({ where: { id: docDemoProject.id }, data: { foremanUserId: foremanUser.id } });
+
+  const carpentryActivity = await prisma.programActivity.findFirstOrThrow({
+    where: { projectId: docDemoProject.id, name: "Carpentry fit-out" },
+  });
+  await prisma.dailySiteUpdate.deleteMany({ where: { organisationId: org.id, projectId: docDemoProject.id } });
+
+  const CREW_NAMES = ["Marcus Webb", "Jacob Ferreira", "Tane Williams"];
+
+  const yesterdayUpdate = await prisma.dailySiteUpdate.create({
+    data: {
+      organisationId: org.id,
+      projectId: docDemoProject.id,
+      foremanUserId: foremanUser.id,
+      date: daysAgo(1),
+      note: "Mild rain in the morning, cleared by 10am.",
+      submittedAt: daysAgo(1),
+    },
+  });
+  for (const workerName of CREW_NAMES) {
+    const workerId = workerIdByName.get(workerName);
+    if (!workerId) throw new Error(`Unknown demo worker "${workerName}"`);
+    await prisma.attendance.create({ data: { dailySiteUpdateId: yesterdayUpdate.id, workerId, present: true } });
+  }
+  await prisma.taskProgress.create({
+    data: {
+      dailySiteUpdateId: yesterdayUpdate.id,
+      programActivityId: carpentryActivity.id,
+      status: "On Track",
+      note: "Framing progressing on Level 3.",
+    },
+  });
+  await prisma.issue.create({
+    data: {
+      organisationId: org.id,
+      projectId: docDemoProject.id,
+      dailySiteUpdateId: yesterdayUpdate.id,
+      raisedByUserId: foremanUser.id,
+      description: "Service lift was out of action for ~2 hours this morning, delayed material movement.",
+      severity: "Medium",
+    },
+  });
+
+  async function placeholderBillFile(name: string) {
+    const existing = await prisma.storedFile.findFirst({ where: { organisationId: org.id, name, projectId: docDemoProject.id } });
+    if (existing) return existing;
+    return prisma.storedFile.create({
+      data: {
+        organisationId: org.id,
+        key: `seed/bills/${docDemoProject.id}/${name}`,
+        name,
+        mime: "application/pdf",
+        size: 180_000,
+        category: "Quotes & Purchase Orders",
+        projectId: docDemoProject.id,
+      },
+    });
+  }
+
+  async function upsertBill(input: {
+    invoiceNumber: string;
+    projectId: string | null;
+    supplierId: string | null;
+    supplierNameRaw: string | null;
+    poId: string | null;
+    amountExGst: number;
+    status: string;
+    allocationStatus: string;
+    jobNumberRaw: string | null;
+    source: string;
+    checklist: { orderedConfirmed: boolean; receivedConfirmed: boolean; quantityConfirmed: boolean; priceConfirmed: boolean };
+  }) {
+    const billFile = await placeholderBillFile(`${input.invoiceNumber}.pdf`);
+    const gstAmount = Math.round(input.amountExGst * 0.1 * 100) / 100;
+    const existing = await prisma.supplierBill.findFirst({ where: { organisationId: org.id, invoiceNumber: input.invoiceNumber } });
+    const data = {
+      organisationId: org.id,
+      projectId: input.projectId,
+      supplierId: input.supplierId,
+      supplierNameRaw: input.supplierNameRaw,
+      poId: input.poId,
+      billFileId: billFile.id,
+      invoiceNumber: input.invoiceNumber,
+      invoiceDate: daysAgo(10),
+      amountExGst: input.amountExGst,
+      gstAmount,
+      amountIncGst: input.amountExGst + gstAmount,
+      jobNumberRaw: input.jobNumberRaw,
+      allocationStatus: input.allocationStatus,
+      status: input.status,
+      source: input.source,
+      ...input.checklist,
+    };
+    return existing ? prisma.supplierBill.update({ where: { id: existing.id }, data }) : prisma.supplierBill.create({ data });
+  }
+
+  await upsertBill({
+    invoiceNumber: "INV-3321",
+    projectId: docDemoProject.id,
+    supplierId: buildRightId,
+    supplierNameRaw: null,
+    poId: po2.id,
+    amountExGst: 22_000,
+    status: "Approved",
+    allocationStatus: "Allocated",
+    jobNumberRaw: docDemoProject.code,
+    source: "Manual",
+    checklist: { orderedConfirmed: true, receivedConfirmed: true, quantityConfirmed: true, priceConfirmed: true },
+  });
+  await upsertBill({
+    invoiceNumber: "INV-5102",
+    projectId: docDemoProject.id,
+    supplierId: steelGlassId,
+    supplierNameRaw: null,
+    poId: po1.id,
+    amountExGst: 30_000,
+    status: "Under review",
+    allocationStatus: "Allocated",
+    jobNumberRaw: docDemoProject.code,
+    source: "Email",
+    checklist: { orderedConfirmed: true, receivedConfirmed: false, quantityConfirmed: false, priceConfirmed: false },
+  });
+  await upsertBill({
+    invoiceNumber: "INV-9981",
+    projectId: null,
+    supplierId: null,
+    supplierNameRaw: "Unknown Glazing Supplies",
+    poId: null,
+    amountExGst: 8_400,
+    status: "Received",
+    allocationStatus: "Unallocated",
+    jobNumberRaw: null,
+    source: "Email",
+    checklist: { orderedConfirmed: false, receivedConfirmed: false, quantityConfirmed: false, priceConfirmed: false },
+  });
+  await upsertBill({
+    invoiceNumber: "INV-2087",
+    projectId: docDemoProject.id,
+    supplierId: buildRightId,
+    supplierNameRaw: null,
+    poId: null,
+    amountExGst: 12_000,
+    status: "Reconciled",
+    allocationStatus: "Allocated",
+    jobNumberRaw: docDemoProject.code,
+    source: "Manual",
+    checklist: { orderedConfirmed: true, receivedConfirmed: true, quantityConfirmed: true, priceConfirmed: true },
+  });
+
+  // A placeholder Phase 7 GeneratedDocument pair (no PDF/XLSX bytes — same
+  // convention as demoStoredFiles above) so the Variation + Progress Claim
+  // commercial wrappers have something real to reference.
+  const variationColors = defaultDocumentTemplateConfig("VARIATION").pdfColors;
+  const orgLetterhead = { legalName: org.legalName!, abn: org.abn!, registeredAddress: org.registeredAddress!, logoUrl: org.logoUrl };
+
+  const existingVariationDoc = await prisma.generatedDocument.findFirst({
+    where: { organisationId: org.id, projectId: docDemoProject.id, type: "VARIATION", number: "VQ-01" },
+  });
+  const variationSnapshot: VariationSnapshot = {
+    number: "VQ-01",
+    version: 1,
+    date: daysAgo(20).toISOString().slice(0, 10),
+    attention: "Matthew Irvine",
+    company: "Meridian Funds Management",
+    cc: "",
+    from: "Paracon Group Pty Ltd",
+    projectName: docDemoProject.name,
+    projectAddress: docDemoProject.address ?? "",
+    introLine: "Please find below additional works undertaken outside of our contractual scope.",
+    lineItems: [{ item: 1, description: "Additional glazing to level 2 lobby", amount: 18_500 }],
+    totals: { totalExGst: 18_500, gst: 1_850, totalIncGst: 20_350 },
+    validityDays: 7,
+    signOffName: "Priya Manager",
+    signOffRole: "Project Manager",
+    signOffPhone: "",
+    org: orgLetterhead,
+    colors: variationColors,
+  };
+  const variationDoc = existingVariationDoc
+    ? await prisma.generatedDocument.update({ where: { id: existingVariationDoc.id }, data: { dataSnapshotJson: variationSnapshot } })
+    : await prisma.generatedDocument.create({
+        data: {
+          organisationId: org.id,
+          type: "VARIATION",
+          projectId: docDemoProject.id,
+          number: "VQ-01",
+          version: 1,
+          dataSnapshotJson: variationSnapshot,
+        },
+      });
+
+  await prisma.variation.upsert({
+    where: { generatedDocumentId: variationDoc.id },
+    update: { value: 18_500, status: "Approved" },
+    create: {
+      organisationId: org.id,
+      projectId: docDemoProject.id,
+      generatedDocumentId: variationDoc.id,
+      number: "VQ-01",
+      value: 18_500,
+      status: "Approved",
+      decidedAt: daysAgo(15),
+    },
+  });
+
+  const claimedAmountExGst = 340_000;
+  const { retentionThisClaim } = calcRetentionForClaim({
+    claimAmountExGst: claimedAmountExGst,
+    cumulativeRetentionHeldBefore: 0,
+    contractValue: docDemoProject.value + 18_500,
+    ratePct: 10,
+    capPct: 5,
+  });
+  const progressClaimColors = defaultDocumentTemplateConfig("PROGRESS_CLAIM").pdfColors;
+  const existingClaimDoc = await prisma.generatedDocument.findFirst({
+    where: { organisationId: org.id, projectId: docDemoProject.id, type: "PROGRESS_CLAIM", number: "Claim #1" },
+  });
+  const progressClaimSnapshot: ProgressClaimSnapshot = {
+    number: "Claim #1",
+    version: 1,
+    date: daysAgo(10).toISOString().slice(0, 10),
+    projectName: docDemoProject.name,
+    projectAddress: docDemoProject.address ?? "",
+    contractWorkLines: [
+      { name: "Partitions", percentCompleted: 40, contractValue: 510_000, previouslyClaimed: 0, valueToBeInvoiced: 204_000, thisClaim: 204_000 },
+      { name: "Doors", percentCompleted: 40, contractValue: 145_000, previouslyClaimed: 0, valueToBeInvoiced: 58_000, thisClaim: 58_000 },
+      { name: "Ceiling", percentCompleted: 40, contractValue: 195_000, previouslyClaimed: 0, valueToBeInvoiced: 78_000, thisClaim: 78_000 },
+    ],
+    variationLines: [],
+    totals: {
+      contractWork: { contractValue: 850_000, valueToBeInvoiced: 340_000, previouslyClaimed: 0, thisClaim: 340_000 },
+      variations: { contractValue: 0, valueToBeInvoiced: 0, previouslyClaimed: 0, thisClaim: 0 },
+      subtotalExGst: 340_000,
+      gst: 34_000,
+      totalIncGst: 374_000,
+    },
+    org: orgLetterhead,
+    colors: progressClaimColors,
+  };
+  const claimDoc = existingClaimDoc
+    ? await prisma.generatedDocument.update({ where: { id: existingClaimDoc.id }, data: { dataSnapshotJson: progressClaimSnapshot } })
+    : await prisma.generatedDocument.create({
+        data: {
+          organisationId: org.id,
+          type: "PROGRESS_CLAIM",
+          projectId: docDemoProject.id,
+          number: "Claim #1",
+          version: 1,
+          dataSnapshotJson: progressClaimSnapshot,
+        },
+      });
+
+  await prisma.progressClaim.upsert({
+    where: { generatedDocumentId: claimDoc.id },
+    update: {},
+    create: {
+      organisationId: org.id,
+      projectId: docDemoProject.id,
+      generatedDocumentId: claimDoc.id,
+      number: "Claim #1",
+      claimedAmountExGst,
+      claimedAmountIncGst: 374_000,
+      retentionPct: 10,
+      retentionHeld: retentionThisClaim,
+      status: "Issued",
+      issuedAt: daysAgo(10),
+    },
+  });
 
   // Platform org — hosts the Super Admin account, kept separate from any
   // tenant so "which org does this user belong to" never gets ambiguous

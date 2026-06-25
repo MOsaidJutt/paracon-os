@@ -43,7 +43,7 @@ Next.js 14 (App Router) + TypeScript, Tailwind + shadcn/ui, Prisma + PostgreSQL 
    - `RESEND_API_KEY` / `EMAIL_FROM` — optional; without a key, invite emails log their link to the
      console instead of sending, so the invite flow still works locally.
    - `APP_URL` — used to build accept-invite links (defaults to `http://localhost:3000`).
-   - `R2_*` — optional; without them, org logo upload will fail (branding accent swatches still work).
+   - `STORAGE_*` — optional; without them, org logo/photo upload and the Documents panel will fail (branding accent swatches still work). Points at a self-hosted MinIO instance or Cloudflare R2.
 
 3. **Push the schema and seed demo data**
 

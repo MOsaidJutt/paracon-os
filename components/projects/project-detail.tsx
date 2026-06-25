@@ -14,10 +14,18 @@ import { ActivityFormSheet, type ActivityRow } from "./activity-form-sheet";
 import { GanttView } from "./gantt-view";
 import { CalendarView } from "./calendar-view";
 import { LabourWeekGrid } from "./labour-week-grid";
+import { DocumentsPanel } from "@/components/documents/documents-panel";
+import { ProjectDocumentActions } from "@/components/documents/generated/project-document-actions";
+import { TradePackagesCard } from "./trade-packages-card";
+import { FinancialsTab } from "@/components/finance/financials-tab";
+import { DeliveryRegister } from "@/components/finance/delivery-register";
+import { SiteUpdatesPanel } from "@/components/site/site-updates-panel";
+import { IssuesPanel } from "@/components/site/issues-panel";
 
 type ApiProject = ProjectRow & {
   client: { id: string; name: string };
   pmUser: { id: string; name: string } | null;
+  foremanUser: { id: string; name: string } | null;
   sourceTender: { id: string; projectName: string } | null;
   milestones: { id: string; name: string; date: string }[];
 };
@@ -26,17 +34,6 @@ function statusVariant(status: string): "default" | "secondary" | "destructive" 
   if (status === "Critical") return "destructive";
   if (status === "Attention") return "secondary";
   return "default";
-}
-
-function ComingSoon({ label }: { label: string }) {
-  return (
-    <Card className="border-dashed">
-      <CardHeader>
-        <CardTitle className="text-base">{label}</CardTitle>
-      </CardHeader>
-      <CardContent className="text-sm text-muted-foreground">Coming in a later phase.</CardContent>
-    </Card>
-  );
 }
 
 export function ProjectDetail({ projectId }: { projectId: string }) {
@@ -91,7 +88,10 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="program">Program</TabsTrigger>
           <TabsTrigger value="labour">Labour</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="financials">Financials</TabsTrigger>
           <TabsTrigger value="deliveries">Deliveries</TabsTrigger>
+          <TabsTrigger value="site-updates">Site updates</TabsTrigger>
           <TabsTrigger value="issues">Issues</TabsTrigger>
         </TabsList>
 
@@ -125,6 +125,14 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
               </CardHeader>
               <CardContent className="text-lg font-semibold text-foreground">
                 {project.pmUser?.name ?? "Unassigned"}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium text-muted-foreground">Foreman</CardTitle>
+              </CardHeader>
+              <CardContent className="text-lg font-semibold text-foreground">
+                {project.foremanUser?.name ?? "Unassigned"}
               </CardContent>
             </Card>
           </div>
@@ -243,12 +251,26 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           <LabourWeekGrid projectId={projectId} />
         </TabsContent>
 
+        <TabsContent value="documents" className="flex flex-col gap-4">
+          <TradePackagesCard projectId={projectId} />
+          <ProjectDocumentActions projectId={projectId} />
+          <DocumentsPanel target={{ projectId }} />
+        </TabsContent>
+
+        <TabsContent value="financials">
+          <FinancialsTab projectId={projectId} canApprove />
+        </TabsContent>
+
         <TabsContent value="deliveries">
-          <ComingSoon label="Deliveries" />
+          <DeliveryRegister projectId={projectId} />
+        </TabsContent>
+
+        <TabsContent value="site-updates">
+          <SiteUpdatesPanel projectId={projectId} />
         </TabsContent>
 
         <TabsContent value="issues">
-          <ComingSoon label="Issues" />
+          <IssuesPanel projectId={projectId} />
         </TabsContent>
       </Tabs>
 

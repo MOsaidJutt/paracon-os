@@ -17,6 +17,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       include: {
         client: { select: { id: true, name: true } },
         pmUser: { select: { id: true, name: true } },
+        foremanUser: { select: { id: true, name: true } },
         sourceTender: { select: { id: true, projectName: true } },
         milestones: { orderBy: { date: "asc" } },
       },
@@ -69,10 +70,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         endDate: body.endDate,
         clientId: body.clientId,
         pmUserId: body.pmUserId,
+        foremanUserId: body.foremanUserId,
+        tradePackages: body.tradePackages,
+        costBudget: body.costBudget,
       },
       include: {
         client: { select: { id: true, name: true } },
         pmUser: { select: { id: true, name: true } },
+        foremanUser: { select: { id: true, name: true } },
       },
     });
 

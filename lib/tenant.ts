@@ -9,6 +9,10 @@ export const UNSCOPED_MODELS = new Set([
   "clientcontact", // no organisationId of its own — scoped indirectly via its parent Client
   "workerperformance", // no organisationId of its own — scoped indirectly via its parent Worker
   "workerskill", // no organisationId of its own — scoped indirectly via its parent Worker
+  "storedfileversion", // no organisationId of its own — scoped indirectly via its parent StoredFile
+  "generateddocumentversion", // no organisationId of its own — scoped indirectly via its parent GeneratedDocument
+  "attendance", // no organisationId of its own — scoped indirectly via its parent DailySiteUpdate
+  "taskprogress", // no organisationId of its own — scoped indirectly via its parent DailySiteUpdate
 ]);
 
 const WHERE_OPS = new Set([

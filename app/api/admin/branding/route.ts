@@ -17,7 +17,7 @@ export async function GET() {
     const [organisation, allowedSwatches] = await Promise.all([
       prisma.organisation.findUniqueOrThrow({
         where: { id: session.user.organisationId },
-        select: { name: true, logoUrl: true, primaryColor: true },
+        select: { name: true, logoUrl: true, primaryColor: true, legalName: true, abn: true, registeredAddress: true },
       }),
       getConfig<string[]>("branding.accentSwatches", session.user.organisationId),
     ]);
@@ -66,7 +66,12 @@ export async function POST(req: NextRequest) {
   }
 }
 
-const patchSchema = z.object({ primaryColor: z.string() });
+const patchSchema = z.object({
+  primaryColor: z.string().optional(),
+  legalName: z.string().min(1).max(200).optional(),
+  abn: z.string().min(1).max(30).optional(),
+  registeredAddress: z.string().min(1).max(300).optional(),
+});
 
 export async function PATCH(req: NextRequest) {
   try {
@@ -75,29 +80,33 @@ export async function PATCH(req: NextRequest) {
 
     // Server-side enforced guardrail — the swatch list is a Config entry,
     // not a free colour picker, so a direct API call can't bypass it either.
-    const allowedSwatches = await getConfig<string[]>(
-      "branding.accentSwatches",
-      session.user.organisationId
-    );
-    if (!allowedSwatches.includes(body.primaryColor)) {
-      return NextResponse.json({ error: "That colour isn't one of the approved brand swatches" }, { status: 400 });
+    if (body.primaryColor !== undefined) {
+      const allowedSwatches = await getConfig<string[]>("branding.accentSwatches", session.user.organisationId);
+      if (!allowedSwatches.includes(body.primaryColor)) {
+        return NextResponse.json({ error: "That colour isn't one of the approved brand swatches" }, { status: 400 });
+      }
     }
 
     const before = await prisma.organisation.findUniqueOrThrow({ where: { id: session.user.organisationId } });
 
     await prisma.organisation.update({
       where: { id: session.user.organisationId },
-      data: { primaryColor: body.primaryColor },
+      data: {
+        primaryColor: body.primaryColor,
+        legalName: body.legalName,
+        abn: body.abn,
+        registeredAddress: body.registeredAddress,
+      },
     });
 
     await auditLog({
       organisationId: session.user.organisationId,
       userId: session.user.id,
-      action: "branding.accent_update",
+      action: "branding.update",
       entityType: "Organisation",
       entityId: session.user.organisationId,
-      before: { primaryColor: before.primaryColor },
-      after: { primaryColor: body.primaryColor },
+      before: { primaryColor: before.primaryColor, legalName: before.legalName, abn: before.abn, registeredAddress: before.registeredAddress },
+      after: body,
     });
 
     return NextResponse.json({ ok: true });

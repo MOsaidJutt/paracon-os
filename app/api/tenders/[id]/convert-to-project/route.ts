@@ -44,8 +44,19 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
         endDate,
         clientId: tender.clientId,
         sourceTenderId: tender.id,
+        // Enter Once — the trade-package list + contract value entered at tender
+        // stage (and used to generate the Tender Letter) becomes the Progress
+        // Claim's CONTRACT WORK rows; never re-typed on the project.
+        tradePackages: tender.tradePackages ?? undefined,
       },
     });
+
+    // Enter Once / Store Once — the tender's documents (estimating files, tender
+    // letters, Drive links) already exist; re-point them at the new project
+    // instead of asking the PM to re-upload anything. tenderId is kept too, so
+    // the originating tender's own documents panel still shows them.
+    await db.storedFile.updateMany({ where: { tenderId: tender.id }, data: { projectId: project.id } });
+    await db.linkedDocument.updateMany({ where: { tenderId: tender.id }, data: { projectId: project.id } });
 
     const expectedLabour = (tender.expectedLabour as Record<string, number> | null) ?? {};
     const roleEntries = Object.entries(expectedLabour).filter(([, count]) => count > 0);

@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getTenantContext } from "@/lib/tenant";
 import { filterUpcomingMilestones } from "@/lib/projects/calculations";
@@ -15,10 +16,6 @@ const ROLE_COPY: Record<string, { title: string; description: string }> = {
     description:
       "Your programs, weekly labour requirements and allocation gaps will surface here once Phase 3–6 land.",
   },
-  "site-foreman": {
-    title: "Today on Site",
-    description: "Your daily update flow (attendance, tasks, deliveries, issues) lands in Phase 7.",
-  },
   estimator: {
     title: "Tender Pipeline",
     description: "The tender register and weighted pipeline KPIs land in Phase 2.",
@@ -32,6 +29,8 @@ const ROLE_COPY: Record<string, { title: string; description: string }> = {
 export default async function DashboardPage() {
   const session = await auth();
   const role = session?.user?.role ?? "viewer";
+  // Zero-tap landing: a foreman's whole job here is the mobile daily update, not a dashboard.
+  if (role === "site-foreman") redirect("/site");
   const copy = ROLE_COPY[role] ?? ROLE_COPY.viewer;
 
   const canViewProjects = session?.user?.permissions.includes("project.view") ?? false;

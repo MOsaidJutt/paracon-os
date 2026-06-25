@@ -4,6 +4,15 @@ const isoDate = z.coerce.date();
 
 export const labourRequiredSchema = z.record(z.string(), z.number().int().min(0));
 
+// The project's trade-package list + contracted value per trade — the single
+// source for the Tender Letter's TENDER PRICE rows and the Progress Claim's
+// CONTRACT WORK rows (lib/documents/generation-service.ts), so a PM enters
+// this once instead of retyping trade values on every generated document.
+export const tradePackageSchema = z.object({
+  name: z.string().min(1).max(100),
+  contractValue: z.number().min(0),
+});
+
 export const createProjectSchema = z.object({
   name: z.string().min(1, "Name is required").max(200),
   code: z.string().min(1, "Code is required").max(40),
@@ -14,6 +23,7 @@ export const createProjectSchema = z.object({
   endDate: isoDate,
   clientId: z.string().min(1, "Client is required"),
   pmUserId: z.string().optional().nullable(),
+  foremanUserId: z.string().optional().nullable(),
 });
 
 export const updateProjectSchema = z.object({
@@ -26,6 +36,9 @@ export const updateProjectSchema = z.object({
   endDate: isoDate.optional(),
   clientId: z.string().min(1).optional(),
   pmUserId: z.string().optional().nullable(),
+  foremanUserId: z.string().optional().nullable(),
+  tradePackages: z.array(tradePackageSchema).optional(),
+  costBudget: z.number().min(0).optional().nullable(),
 });
 
 export const listProjectsQuerySchema = z.object({
@@ -63,6 +76,7 @@ export const updateActivitySchema = z.object({
   labourRequired: labourRequiredSchema.optional(),
 });
 
+export type TradePackageInput = z.infer<typeof tradePackageSchema>;
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 export type ListProjectsQuery = z.infer<typeof listProjectsQuerySchema>;

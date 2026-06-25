@@ -12,14 +12,22 @@ datasource db {
 // ─── Tenancy ──────────────────────────────────────────────────────────────────
 
 model Organisation {
-  id           String   @id @default(cuid())
-  name         String
-  slug         String   @unique
-  logoUrl      String?
-  primaryColor String?  @default("#B08D57")
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                String   @id @default(cuid())
+  name              String
+  slug              String   @unique
+  logoUrl           String?
+  primaryColor      String?  @default("#B08D57")
+  isActive          Boolean  @default(true)
+  // Legal entity printed on every generated document (CLAUDE.md rule 14) —
+  // config, not a code constant, so a future white-label tenant carries its
+  // own correct entity instead of Paracon's. Seeded for Paracon with the
+  // CURRENT ABN (80 317 795 082) — the legacy templates in source data still
+  // carry the retired ABN (42 166 362 625); this is the one place it's fixed.
+  legalName         String?
+  abn               String?
+  registeredAddress String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   users               User[]
   roles               Role[]
@@ -40,6 +48,115 @@ model Organisation {
   skills              Skill[]
   workerLeave         WorkerLeave[]
   forecastSnapshot    ForecastSnapshot?
+  storedFiles         StoredFile[]
+  linkedDocuments     LinkedDocument[]
+  importJobs          ImportJob[]
+  estimateLineItems   EstimateLineItem[]
+  documentTemplates   DocumentTemplate[]
+  generatedDocuments  GeneratedDocument[]
+  counters            Counter[]
+  purchaseOrders      PurchaseOrder[]
+  deliveries          Delivery[]
+  supplierBills       SupplierBill[]
+  variations          Variation[]
+  progressClaims      ProgressClaim[]
+  retentionReleases   RetentionRelease[]
+  mailboxSetting      MailboxSetting?
+  allocations         Allocation[]
+  dailySiteUpdates    DailySiteUpdate[]
+  issues              Issue[]
+}
+
+// ─── Documents & Templates engine ────────────────────────────────────────────
+// DocumentTemplate holds each org's reusable generation config (scope-builder
+// library, qualifications boilerplate, PDF colour tokens) — CONFIG NOT CODE,
+// edited from an admin screen, never hard-coded in the PDF/XLSX generators.
+// Counter gives atomic per-org sequence numbers, keyed by a scope string (e.g.
+// "VARIATION:<projectId>", "PROGRESS_CLAIM:<projectId>", "TENDER_LETTER:<tenderId>")
+// so VQ-## / Claim # reset per project while staying race-safe under concurrent
+// generation requests (single upsert+increment is one atomic SQL statement).
+// GeneratedDocument snapshots the exact data used for one generated
+// PDF+XLSX pair so a previously-issued document never silently changes if an
+// org's template config or a tender/project's fields are edited afterwards;
+// "Regenerate" creates a NEW version with a fresh snapshot under the same number.
+
+enum DocumentTemplateType {
+  TENDER_LETTER
+  VARIATION
+  PROGRESS_CLAIM
+}
+
+model DocumentTemplate {
+  id             String               @id @default(cuid())
+  organisationId String
+  organisation   Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  type           DocumentTemplateType
+  configJson     Json
+  isActive       Boolean              @default(true)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@unique([organisationId, type])
+}
+
+// status is free-text validated against Config (document.generatedStatusList),
+// mirroring Tender.status/Project.status — added because the source Drive
+// folders encode a variation's withdrawn state only in the folder name
+// (intake notes: "VQ-10 ... (WITHDRAWN)"); here it's a real field instead.
+model GeneratedDocument {
+  id               String               @id @default(cuid())
+  organisationId   String
+  organisation     Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  type             DocumentTemplateType
+  projectId        String?
+  project          Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tenderId         String?
+  tender           Tender?              @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  number           String
+  version          Int                  @default(1)
+  dataSnapshotJson Json
+  pdfFileId        String?
+  pdfFile          StoredFile?          @relation("GeneratedDocumentPdf", fields: [pdfFileId], references: [id], onDelete: SetNull)
+  xlsxFileId       String?
+  xlsxFile         StoredFile?          @relation("GeneratedDocumentXlsx", fields: [xlsxFileId], references: [id], onDelete: SetNull)
+  status           String               @default("Issued")
+  createdByUserId  String?
+  createdBy        User?                @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime             @default(now())
+
+  versions      GeneratedDocumentVersion[]
+  variation     Variation?
+  progressClaim ProgressClaim?
+
+  @@index([organisationId, projectId])
+  @@index([organisationId, tenderId])
+  @@index([organisationId, type])
+}
+
+// Append-only history of every version a "Regenerate" superseded — mirrors
+// StoredFileVersion's pattern. The GeneratedDocument row above always holds
+// the CURRENT version's snapshot + files.
+model GeneratedDocumentVersion {
+  id                  String            @id @default(cuid())
+  generatedDocumentId String
+  generatedDocument   GeneratedDocument @relation(fields: [generatedDocumentId], references: [id], onDelete: Cascade)
+  version             Int
+  dataSnapshotJson    Json
+  pdfFileId           String?
+  xlsxFileId          String?
+  createdAt           DateTime          @default(now())
+
+  @@index([generatedDocumentId])
+}
+
+model Counter {
+  id             String       @id @default(cuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  scope          String
+  value          Int          @default(0)
+
+  @@unique([organisationId, scope])
 }
 
 // ─── Identity & Access ────────────────────────────────────────────────────────
@@ -57,9 +174,23 @@ model User {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  auditLogs    AuditLog[]
-  sentInvites  Invite[]
-  pmProjects   Project[]
+  auditLogs                 AuditLog[]
+  sentInvites               Invite[]
+  pmProjects                Project[]           @relation("ProjectPm")
+  storedFiles               StoredFile[]
+  storedFileVersions        StoredFileVersion[]
+  linkedDocuments           LinkedDocument[]
+  importJobs                ImportJob[]
+  generatedDocuments        GeneratedDocument[]
+  purchaseOrdersCreated     PurchaseOrder[]
+  supplierBillDecisions     SupplierBill[]
+  variationDecisions        Variation[]
+  progressClaimDecisions    ProgressClaim[]
+  retentionReleasesRecorded RetentionRelease[]
+  allocationsCreated        Allocation[]
+  foremanProjects           Project[]           @relation("ProjectForeman")
+  dailySiteUpdatesAsForeman DailySiteUpdate[]   @relation("DailySiteUpdateForeman")
+  issuesRaised              Issue[]             @relation("IssueRaisedBy")
 
   @@unique([organisationId, email])
   @@index([roleId])
@@ -199,6 +330,7 @@ enum ConfigType {
   NUMBER
   WEIGHTS
   BANDS
+  TEXT
 }
 
 model Config {
@@ -275,6 +407,10 @@ model Supplier {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
+  purchaseOrders PurchaseOrder[]
+  deliveries     Delivery[]
+  supplierBills  SupplierBill[]
+
   @@unique([organisationId, company, contact])
   @@index([organisationId, trade])
 }
@@ -311,10 +447,21 @@ model Tender {
   expectedStart         DateTime?
   expectedEnd           DateTime?
   expectedLabour        Json?
+  // [{ name: "Partitions", contractValue: number }] — the trade-package list +
+  // sell value used by the Tender Letter's TENDER PRICE rows. Per-project/
+  // tender custom list (intake notes confirm Partitions/Doors/Ceiling is not a
+  // fixed global enum), defaulted from document.defaultTradePackageList and
+  // carried into Project.tradePackages on "Won" conversion (enter once).
+  tradePackages         Json?
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
 
   project Project?
+
+  storedFiles        StoredFile[]
+  linkedDocuments    LinkedDocument[]
+  estimateLineItems  EstimateLineItem[]
+  generatedDocuments GeneratedDocument[]
 
   @@unique([organisationId, projectName, clientId])
   @@index([organisationId, status])
@@ -345,12 +492,39 @@ model Project {
   sourceTenderId String?      @unique
   sourceTender   Tender?      @relation(fields: [sourceTenderId], references: [id])
   pmUserId       String?
-  pmUser         User?        @relation(fields: [pmUserId], references: [id])
+  pmUser         User?        @relation("ProjectPm", fields: [pmUserId], references: [id])
+  // One foreman per active site (org chart: "one per active site") — resolved
+  // by /api/site/today so a foreman lands on their project with zero taps.
+  foremanUserId  String?
+  foremanUser    User?        @relation("ProjectForeman", fields: [foremanUserId], references: [id])
+  // [{ name: "Partitions", contractValue: number }] — carried from the source
+  // Tender on conversion (enter once); feeds the Progress Claim's CONTRACT
+  // WORK rows and is editable on the project if the contract is varied.
+  tradePackages  Json?
+  // Internal budgeted COST (distinct from `value`, the client-facing contract
+  // sell price) — the other half of cost-vs-budget/margin. Null until a PM
+  // sets it; financials derivation treats a null budget as "not yet set"
+  // rather than zero.
+  costBudget     Float?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
   activities ProgramActivity[]
   milestones Milestone[]
+
+  storedFiles        StoredFile[]
+  linkedDocuments    LinkedDocument[]
+  estimateLineItems  EstimateLineItem[]
+  generatedDocuments GeneratedDocument[]
+  purchaseOrders     PurchaseOrder[]
+  deliveries         Delivery[]
+  supplierBills      SupplierBill[]
+  variations         Variation[]
+  progressClaims     ProgressClaim[]
+  retentionReleases  RetentionRelease[]
+  allocations        Allocation[]
+  dailySiteUpdates   DailySiteUpdate[]
+  issues             Issue[]
 
   @@unique([organisationId, code])
   @@index([organisationId, status])
@@ -375,7 +549,8 @@ model ProgramActivity {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  milestones Milestone[]
+  milestones   Milestone[]
+  taskProgress TaskProgress[]
 
   @@index([organisationId])
   @@index([projectId, startDate])
@@ -426,6 +601,9 @@ model Worker {
   compliance  Compliance[]
   skills      WorkerSkill[]
   leave       WorkerLeave[]
+  storedFiles StoredFile[]
+  allocations Allocation[]
+  attendances Attendance[]
 
   @@index([organisationId, capability])
   @@index([organisationId, status])
@@ -503,6 +681,126 @@ model WorkerSkill {
   @@id([workerId, skillId])
 }
 
+// ─── Resource Planner / Allocation (Phase 9) ─────────────────────────────────
+// One row = one worker committed to one project for one ISO week (Monday,
+// matching lib/dates.ts startOfIsoWeek). Trade is intentionally NOT
+// snapshotted here — it's read live via worker.capability, the same shared
+// trade.capabilityList every other demand/supply source already keys off, so
+// there's no second copy to drift. The unique constraint is the structural
+// double-booking guard: a worker can hold at most one allocation per week,
+// full stop, across any project — the service layer pre-checks this for a
+// clean 409 instead of surfacing a raw constraint violation.
+model Allocation {
+  id              String       @id @default(cuid())
+  organisationId  String
+  organisation    Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  workerId        String
+  worker          Worker       @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  projectId       String
+  project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  weekStart       DateTime
+  createdByUserId String?
+  createdBy       User?        @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime     @default(now())
+
+  @@unique([organisationId, workerId, weekStart])
+  @@index([organisationId, projectId, weekStart])
+  @@index([organisationId, workerId])
+}
+
+// ─── Foreman Mobile Daily Updates (Phase 10) ─────────────────────────────────
+// One row per foreman per project per calendar day — the offline-tolerant
+// single-confirm submission the mobile flow centres on. Resolved via
+// get-or-create on [organisationId, projectId, foremanUserId, date] so photo
+// uploads, issue raises and the final submit are each independent and
+// replay-safe — none of them has to wait for another to exist first, which is
+// what makes the client-side sync queue able to flush in any order once back
+// online. submittedAt stays null while a resumed session is still mid-entry;
+// it's set once the foreman taps the single confirm button (the vision doc's
+// "Required: Crew Today, Progress" is enforced at the Zod layer, not here).
+
+model DailySiteUpdate {
+  id             String       @id @default(cuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  projectId      String
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  foremanUserId  String
+  foremanUser    User         @relation("DailySiteUpdateForeman", fields: [foremanUserId], references: [id])
+  date           DateTime
+  // Free-text daily note (vision doc's optional "Note" field — weather,
+  // access issues, anything not captured by a tick or a photo).
+  note           String?
+  submittedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  attendance   Attendance[]
+  taskProgress TaskProgress[]
+  issues       Issue[]
+  photos       StoredFile[]
+  deliveries   Delivery[]
+
+  @@unique([organisationId, projectId, foremanUserId, date])
+  @@index([organisationId, projectId, date])
+}
+
+model Attendance {
+  id                String          @id @default(cuid())
+  dailySiteUpdateId String
+  dailySiteUpdate   DailySiteUpdate @relation(fields: [dailySiteUpdateId], references: [id], onDelete: Cascade)
+  workerId          String
+  worker            Worker          @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  present           Boolean
+  hours             Float?
+
+  @@unique([dailySiteUpdateId, workerId])
+  @@index([workerId])
+}
+
+model TaskProgress {
+  id                String          @id @default(cuid())
+  dailySiteUpdateId String
+  dailySiteUpdate   DailySiteUpdate @relation(fields: [dailySiteUpdateId], references: [id], onDelete: Cascade)
+  programActivityId String
+  programActivity   ProgramActivity @relation(fields: [programActivityId], references: [id], onDelete: Cascade)
+  status            String
+  note              String?
+
+  @@unique([dailySiteUpdateId, programActivityId])
+  @@index([programActivityId])
+}
+
+// status/severity are free-text, validated at the Zod layer against Config
+// (site.issueStatusList, site.issueSeverityList) — CONFIG NOT CODE, mirroring
+// every other status field in this schema.
+model Issue {
+  id                String           @id @default(cuid())
+  organisationId    String
+  organisation      Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  projectId         String
+  project           Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  dailySiteUpdateId String?
+  dailySiteUpdate   DailySiteUpdate? @relation(fields: [dailySiteUpdateId], references: [id], onDelete: SetNull)
+  raisedByUserId    String?
+  raisedBy          User?            @relation("IssueRaisedBy", fields: [raisedByUserId], references: [id], onDelete: SetNull)
+  description       String
+  severity          String
+  status            String           @default("Open")
+  // Client-generated dedupe key — a sync-queue replay (response lost,
+  // retried after reconnect) never creates a duplicate issue. Same pattern as
+  // SupplierBill.emailMessageId; multiple NULLs stay distinct.
+  clientRef         String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  photos StoredFile[]
+
+  @@unique([organisationId, clientRef])
+  @@index([organisationId, projectId])
+  @@index([organisationId, status])
+}
+
 // ─── Forecast & Capacity ──────────────────────────────────────────────────────
 // One row per org — a persisted cache of the last computed forecast, kept warm
 // by the nightly/on-demand Inngest job and by future Action Centre alerts
@@ -522,6 +820,384 @@ model ForecastSnapshot {
   headroomJson    Json
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+}
+
+// ─── Document Management (hybrid storage) ────────────────────────────────────
+// category/kind are free-text, validated at the Zod layer against the Config
+// registry (document.projectCategoryList, document.tenderCategoryList,
+// document.linkedKindList), mirroring every other CONFIG NOT CODE list in this
+// schema. StoredFile always holds the CURRENT version; StoredFileVersion is an
+// append-only history of every version it superseded — old object keys are
+// kept in storage, never deleted, only superseded.
+
+model StoredFile {
+  id                String           @id @default(cuid())
+  organisationId    String
+  organisation      Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  key               String
+  name              String
+  mime              String
+  size              Int
+  version           Int              @default(1)
+  category          String
+  // Free-text photo caption (Site Photo category) — null for every other
+  // category. Generic rather than a separate SitePhoto model: a site photo is
+  // just a StoredFile, per the hybrid storage section's "store once" rule.
+  caption           String?
+  // Client-generated dedupe key (mobile sync-queue retries) — same pattern as
+  // SupplierBill.emailMessageId; multiple NULLs stay distinct under the
+  // unique index, so every non-Site-Photo upload is unaffected.
+  clientRef         String?
+  previewKey        String?
+  tagsJson          Json             @default("[]")
+  projectId         String?
+  project           Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tenderId          String?
+  tender            Tender?          @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  workerId          String?
+  worker            Worker?          @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  dailySiteUpdateId String?
+  dailySiteUpdate   DailySiteUpdate? @relation(fields: [dailySiteUpdateId], references: [id], onDelete: Cascade)
+  issueId           String?
+  issue             Issue?           @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  uploadedByUserId  String?
+  uploadedBy        User?            @relation(fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  versions                      StoredFileVersion[]
+  generatedDocumentPdfOf        GeneratedDocument[] @relation("GeneratedDocumentPdf")
+  generatedDocumentXlsxOf       GeneratedDocument[] @relation("GeneratedDocumentXlsx")
+  supplierBills                 SupplierBill[]
+  progressClaimStatDeclarations ProgressClaim[]
+
+  @@unique([organisationId, clientRef])
+  @@index([organisationId, projectId])
+  @@index([organisationId, tenderId])
+  @@index([organisationId, workerId])
+  @@index([organisationId, category])
+  @@index([organisationId, dailySiteUpdateId])
+  @@index([organisationId, issueId])
+}
+
+model StoredFileVersion {
+  id               String     @id @default(cuid())
+  storedFileId     String
+  storedFile       StoredFile @relation(fields: [storedFileId], references: [id], onDelete: Cascade)
+  key              String
+  version          Int
+  size             Int
+  mime             String
+  uploadedByUserId String?
+  uploadedBy       User?      @relation(fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime   @default(now())
+
+  @@index([storedFileId])
+}
+
+model LinkedDocument {
+  id             String       @id @default(cuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  name           String
+  driveUrl       String
+  kind           String
+  projectId      String?
+  project        Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tenderId       String?
+  tender         Tender?      @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  addedByUserId  String?
+  addedBy        User?        @relation(fields: [addedByUserId], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organisationId, projectId])
+  @@index([organisationId, tenderId])
+}
+
+// ─── Import Centre ────────────────────────────────────────────────────────────
+// importerKey identifies which pluggable importer (lib/import/registry.ts) ran.
+// contentHash + importerKey + organisationId is the idempotency key: committing
+// the same file twice for the same importer short-circuits to the prior report
+// instead of re-applying side effects. ImportJobStatus is an internal system
+// status (like AiScope/ConfigType above), not business-config data, so it's a
+// real enum rather than a Config-backed free-text list.
+
+enum ImportJobStatus {
+  PENDING
+  COMMITTED
+  FAILED
+}
+
+model ImportJob {
+  id              String          @id @default(cuid())
+  organisationId  String
+  organisation    Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  importerKey     String
+  fileName        String
+  contentHash     String
+  stagedKey       String?
+  status          ImportJobStatus @default(PENDING)
+  summaryJson     Json?
+  createdByUserId String?
+  createdBy       User?           @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  estimateLineItems EstimateLineItem[]
+
+  @@index([organisationId, importerKey, contentHash])
+}
+
+model EstimateLineItem {
+  id             String       @id @default(cuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  projectId      String?
+  project        Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tenderId       String?
+  tender         Tender?      @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  description    String
+  quantity       Float
+  unit           String
+  unitRate       Float?
+  amount         Float?
+  remarks        String?
+  source         String       @default("zztakeoff")
+  importJobId    String?
+  importJob      ImportJob?   @relation(fields: [importJobId], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+
+  @@index([organisationId, projectId])
+  @@index([organisationId, tenderId])
+}
+
+// ─── Project Financials & Invoice Review (Phase 8) ───────────────────────────
+// Replaces the Dropbox for-review/approved/reconcile folders + the make.com
+// sorting chain with an in-app review pipeline. EzzyBills + Xero stay the
+// downstream bookkeeping tools exactly as today — OneParacon ingests incoming
+// bills, runs the PM's existing four-point checklist, and hands an APPROVED
+// bill onward (export, or the accounts team's existing manual forward into
+// EzzyBills); it never calls either API live (CLAUDE.md rule 11).
+
+model PurchaseOrder {
+  id              String       @id @default(cuid())
+  organisationId  String
+  organisation    Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  projectId       String
+  project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  supplierId      String?
+  supplier        Supplier?    @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  // Per-project sequential, e.g. "PO-01" (lib/finance/numbering.ts), mirroring
+  // the Phase 7 VQ-##/Claim # Counter-backed scheme.
+  number          String
+  // [{ description, quantity, unit, unitRate, amount }] — free-form, like
+  // EstimateLineItem; a PO rarely needs full take-off rigour.
+  itemsJson       Json         @default("[]")
+  value           Float        @default(0)
+  expectedDate    DateTime?
+  status          String       @default("Draft")
+  createdByUserId String?
+  createdBy       User?        @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  deliveries Delivery[]
+  bills      SupplierBill[]
+
+  @@unique([organisationId, projectId, number])
+  @@index([organisationId, projectId])
+  @@index([organisationId, status])
+}
+
+model Delivery {
+  id                String           @id @default(cuid())
+  organisationId    String
+  organisation      Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  projectId         String
+  project           Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // Optional — small ad-hoc deliveries don't always have a formal PO, per the
+  // intake notes' simple Procurement register (Supplier/Material/Project/
+  // Required Date/Ordered/Delivered).
+  poId              String?
+  po                PurchaseOrder?   @relation(fields: [poId], references: [id], onDelete: SetNull)
+  supplierId        String?
+  supplier          Supplier?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  itemsJson         Json             @default("[]")
+  expectedDate      DateTime?
+  deliveredDate     DateTime?
+  status            String           @default("Pending")
+  // Traceability only — which foreman daily update confirmed/flagged this
+  // delivery, if any. Confirming via the mobile flow just writes status +
+  // deliveredDate through the existing Phase 8 delivery service; this is the
+  // audit trail back to the update that triggered it, not a second source of
+  // truth for delivery state.
+  dailySiteUpdateId String?
+  dailySiteUpdate   DailySiteUpdate? @relation(fields: [dailySiteUpdateId], references: [id], onDelete: SetNull)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([organisationId, projectId])
+  @@index([organisationId, poId])
+  @@index([organisationId, status])
+  @@index([organisationId, dailySiteUpdateId])
+}
+
+// status is free-text, validated against finance.bill.statusList (CONFIG NOT
+// CODE, mirroring every other status field in this schema). allocationStatus
+// is the auto-pull mailbox watcher's routing flag: Unallocated bills surface
+// in the org-wide tray for the accounts person to assign in one click.
+model SupplierBill {
+  id                   String         @id @default(cuid())
+  organisationId       String
+  organisation         Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  projectId            String?
+  project              Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  supplierId           String?
+  supplier             Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  // Raw sender/extracted supplier name, kept even after a Supplier match is
+  // made, so the original email evidence is never lost.
+  supplierNameRaw      String?
+  poId                 String?
+  po                   PurchaseOrder? @relation(fields: [poId], references: [id], onDelete: SetNull)
+  billFileId           String
+  billFile             StoredFile     @relation(fields: [billFileId], references: [id], onDelete: Cascade)
+  invoiceNumber        String?
+  invoiceDate          DateTime?
+  amountExGst          Float          @default(0)
+  gstAmount            Float          @default(0)
+  amountIncGst         Float          @default(0)
+  // The P##-#### text actually found (mailbox watcher or manual entry) —
+  // kept regardless of whether it resolved to a real project, as an audit
+  // trail for why a bill did/didn't auto-allocate.
+  jobNumberRaw         String?
+  allocationStatus     String         @default("Unallocated")
+  status               String         @default("Received")
+  orderedConfirmed     Boolean        @default(false)
+  receivedConfirmed    Boolean        @default(false)
+  quantityConfirmed    Boolean        @default(false)
+  priceConfirmed       Boolean        @default(false)
+  reviewNote           String?
+  lastDecisionByUserId String?
+  lastDecisionBy       User?          @relation(fields: [lastDecisionByUserId], references: [id], onDelete: SetNull)
+  lastDecisionAt       DateTime?
+  source               String         @default("Manual")
+  // Dedupe key for the IMAP watcher — re-polling never double-ingests the
+  // same message. Null (manual bills) doesn't collide: Postgres/SQLite treat
+  // multiple NULLs in a unique index as distinct.
+  emailMessageId       String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@unique([organisationId, emailMessageId])
+  @@index([organisationId, projectId])
+  @@index([organisationId, allocationStatus])
+  @@index([organisationId, status])
+  @@index([organisationId, poId])
+}
+
+// Thin commercial wrapper around a Phase-7 GeneratedDocument(type=VARIATION):
+// tracks the register's Submitted/Approved/Outstanding status and contract
+// value contribution, kept separate from the document's own Issued/Withdrawn/
+// Superseded lifecycle status so the two concerns never collide.
+model Variation {
+  id                  String            @id @default(cuid())
+  organisationId      String
+  organisation        Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  projectId           String
+  project             Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  generatedDocumentId String            @unique
+  generatedDocument   GeneratedDocument @relation(fields: [generatedDocumentId], references: [id], onDelete: Cascade)
+  number              String
+  value               Float
+  status              String            @default("Submitted")
+  decidedByUserId     String?
+  decidedBy           User?             @relation(fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  decidedAt           DateTime?
+  note                String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([organisationId, projectId])
+  @@index([organisationId, status])
+}
+
+// Thin commercial wrapper around a Phase-7 GeneratedDocument(type=PROGRESS_CLAIM):
+// the internal review/approve/issue/certify/pay pipeline + retention
+// tracking the document-generation step itself doesn't know about.
+// retentionPct/retentionHeld are snapshotted at decision time so a later
+// admin change to the retention config never reshapes a past claim.
+model ProgressClaim {
+  id                    String            @id @default(cuid())
+  organisationId        String
+  organisation          Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  projectId             String
+  project               Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  generatedDocumentId   String            @unique
+  generatedDocument     GeneratedDocument @relation(fields: [generatedDocumentId], references: [id], onDelete: Cascade)
+  number                String
+  claimedAmountExGst    Float
+  claimedAmountIncGst   Float
+  retentionPct          Float             @default(0)
+  retentionHeld         Float             @default(0)
+  statDeclarationFileId String?
+  statDeclarationFile   StoredFile?       @relation(fields: [statDeclarationFileId], references: [id], onDelete: SetNull)
+  status                String            @default("Draft")
+  certifiedAmount       Float?
+  certifiedAt           DateTime?
+  paidAmount            Float             @default(0)
+  paidAt                DateTime?
+  decidedByUserId       String?
+  decidedBy             User?             @relation(fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  decidedAt             DateTime?
+  issuedAt              DateTime?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@index([organisationId, projectId])
+  @@index([organisationId, status])
+}
+
+// Append-only ledger of retention released back to the supplier/client side
+// (Practical Completion releases half the 5% cap; Final releases the rest
+// post-defects-liability) — lets retention-held-to-date always be derived as
+// sum(claims.retentionHeld) - sum(releases.amount) rather than a single
+// mutable scalar, so staged/partial PC releases are representable.
+model RetentionRelease {
+  id               String       @id @default(cuid())
+  organisationId   String
+  organisation     Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  projectId        String
+  project          Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  amount           Float
+  type             String       @default("PracticalCompletion")
+  note             String?
+  recordedByUserId String?
+  recordedBy       User?        @relation(fields: [recordedByUserId], references: [id], onDelete: SetNull)
+  releasedAt       DateTime     @default(now())
+
+  @@index([organisationId, projectId])
+}
+
+// One mailbox per org — the "auto-pull" accounts inbox the bill watcher
+// polls. password is encrypted at rest via lib/crypto.ts (same pattern as
+// AiSetting.apiKeyEncrypted); never logged or returned to the client.
+model MailboxSetting {
+  id                String       @id @default(cuid())
+  organisationId    String       @unique
+  organisation      Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  host              String
+  port              Int          @default(993)
+  username          String
+  passwordEncrypted String
+  useTls            Boolean      @default(true)
+  folder            String       @default("INBOX")
+  enabled           Boolean      @default(false)
+  lastSeenUid       Int          @default(0)
+  lastPolledAt      DateTime?
+  updatedBy         String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────

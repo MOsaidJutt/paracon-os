@@ -46,6 +46,9 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 
+# local S3-compatible storage data (npm run dev:storage)
+/.s3rver-data/
+
 # local SQLite dev database — contains password hashes, encrypted AI keys and
 # whatever demo/test data has accumulated; never commit a live database file.
 /prisma/dev.db

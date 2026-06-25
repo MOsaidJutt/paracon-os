@@ -20,6 +20,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { DocumentsPanel } from "@/components/documents/documents-panel";
+import { TenderDocumentActions } from "@/components/documents/generated/tender-document-actions";
 import type { TenderConfig } from "@/lib/tenders/config";
 
 export type TenderRow = {
@@ -577,6 +580,14 @@ export function TenderFormSheet({
             </SheetFooter>
           </form>
         </Form>
+
+        {isEdit && (
+          <>
+            <Separator className="my-6" />
+            <TenderDocumentActions tenderId={tender!.id} />
+            <DocumentsPanel target={{ tenderId: tender!.id }} />
+          </>
+        )}
       </SheetContent>
     </Sheet>
   );

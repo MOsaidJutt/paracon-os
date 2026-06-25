@@ -11,6 +11,8 @@ const TABS = [
   { href: "/admin/branding", label: "Branding", permission: "admin.branding" },
   { href: "/admin/audit", label: "Audit Log", permission: "admin.audit" },
   { href: "/admin/settings", label: "Settings", permission: "admin.settings" },
+  { href: "/admin/document-templates", label: "Document Templates", permission: "admin.settings" },
+  { href: "/admin/mailbox", label: "Accounts Inbox", permission: "admin.settings" },
   { href: "/admin/billing", label: "Billing", permission: "admin.billing" },
 ];
 

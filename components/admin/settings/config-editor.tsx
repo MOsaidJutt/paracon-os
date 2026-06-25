@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 type ConfigEntry = {
   key: string;
   group: string;
-  type: "LIST" | "NUMBER" | "WEIGHTS" | "BANDS";
+  type: "LIST" | "NUMBER" | "WEIGHTS" | "BANDS" | "TEXT";
   label: string;
   description: string;
   value: unknown;
@@ -87,6 +87,14 @@ function ConfigCard({
             type="number"
             value={draft as number}
             onChange={(e) => setDraft(Number(e.target.value))}
+          />
+        )}
+
+        {entry.type === "TEXT" && (
+          <Input
+            type="text"
+            value={draft as string}
+            onChange={(e) => setDraft(e.target.value)}
           />
         )}
 

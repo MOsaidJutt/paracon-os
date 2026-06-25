@@ -25,3 +25,10 @@ export class BadRequestError extends Error {
     this.name = "BadRequestError";
   }
 }
+
+export class ConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ConflictError";
+  }
+}

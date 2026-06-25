@@ -1,16 +1,86 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 type BrandingData = {
-  organisation: { name: string; logoUrl: string | null; primaryColor: string | null };
+  organisation: {
+    name: string;
+    logoUrl: string | null;
+    primaryColor: string | null;
+    legalName: string | null;
+    abn: string | null;
+    registeredAddress: string | null;
+  };
   allowedSwatches: string[];
 };
+
+function LegalEntityCard({ organisation }: { organisation: BrandingData["organisation"] }) {
+  const queryClient = useQueryClient();
+  const [legalName, setLegalName] = useState(organisation.legalName ?? "");
+  const [abn, setAbn] = useState(organisation.abn ?? "");
+  const [registeredAddress, setRegisteredAddress] = useState(organisation.registeredAddress ?? "");
+
+  useEffect(() => {
+    setLegalName(organisation.legalName ?? "");
+    setAbn(organisation.abn ?? "");
+    setRegisteredAddress(organisation.registeredAddress ?? "");
+  }, [organisation]);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/branding", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ legalName, abn, registeredAddress }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Failed to save");
+      }
+    },
+    onSuccess: () => {
+      toast.success("Legal entity saved");
+      queryClient.invalidateQueries({ queryKey: ["admin", "branding"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Legal entity</CardTitle>
+        <CardDescription>
+          Printed on every generated Tender Letter, Variation and Progress Claim — set once here, never edited in
+          a template again.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="legal-name">Legal name</Label>
+          <Input id="legal-name" value={legalName} onChange={(e) => setLegalName(e.target.value)} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="legal-abn">ABN</Label>
+          <Input id="legal-abn" value={abn} onChange={(e) => setAbn(e.target.value)} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="legal-address">Registered address</Label>
+          <Input id="legal-address" value={registeredAddress} onChange={(e) => setRegisteredAddress(e.target.value)} />
+        </div>
+        <Button size="sm" className="self-start" disabled={save.isPending} onClick={() => save.mutate()}>
+          {save.isPending ? "Saving..." : "Save"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function BrandingForm() {
   const queryClient = useQueryClient();
@@ -125,6 +195,8 @@ export function BrandingForm() {
           ))}
         </CardContent>
       </Card>
+
+      <LegalEntityCard organisation={data.organisation} />
     </div>
   );
 }

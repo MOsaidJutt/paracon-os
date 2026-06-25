@@ -63,3 +63,24 @@ export function aggregateLabourDemand(activities: ActivityForDemand[]): Record<s
 
   return demand;
 }
+
+export type AllocationForRollup = { weekStart: Date; trade: string };
+
+/**
+ * Sums allocated headcount per trade per week — the "allocated" half of the
+ * Resource Planner's allocated-vs-required grid, in the same week-bucketed
+ * shape aggregateLabourDemand produces for "required" so both can share one
+ * blocks/weeks axis. Trade is read live from worker.capability by the caller
+ * rather than snapshotted on Allocation.
+ */
+export function aggregateAllocatedByTrade(allocations: AllocationForRollup[]): Record<string, Record<string, number>> {
+  const allocated: Record<string, Record<string, number>> = {};
+
+  for (const allocation of allocations) {
+    const key = weekKey(allocation.weekStart);
+    const week = (allocated[key] ??= {});
+    week[allocation.trade] = (week[allocation.trade] ?? 0) + 1;
+  }
+
+  return allocated;
+}

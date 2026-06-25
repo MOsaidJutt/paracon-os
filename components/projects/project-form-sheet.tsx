@@ -31,6 +31,7 @@ export type ProjectRow = {
   endDate: string;
   clientId: string;
   pmUserId: string | null;
+  foremanUserId: string | null;
 };
 
 type ClientOption = { id: string; name: string };
@@ -46,6 +47,7 @@ const formSchema = z.object({
   endDate: z.string().min(1, "End date is required"),
   clientId: z.string().min(1, "Client is required"),
   pmUserId: z.string().optional(),
+  foremanUserId: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -60,6 +62,7 @@ const EMPTY_DEFAULTS: FormValues = {
   endDate: "",
   clientId: "",
   pmUserId: "",
+  foremanUserId: "",
 };
 
 function toFormValues(project: ProjectRow): FormValues {
@@ -73,6 +76,7 @@ function toFormValues(project: ProjectRow): FormValues {
     endDate: project.endDate.slice(0, 10),
     clientId: project.clientId,
     pmUserId: project.pmUserId ?? "",
+    foremanUserId: project.foremanUserId ?? "",
   };
 }
 
@@ -127,6 +131,7 @@ export function ProjectFormSheet({
         ...values,
         address: values.address || null,
         pmUserId: values.pmUserId || null,
+        foremanUserId: values.foremanUserId || null,
       };
       const url = isEdit ? `/api/projects/${project!.id}` : "/api/projects";
       const method = isEdit ? "PATCH" : "POST";
@@ -275,6 +280,33 @@ export function ProjectFormSheet({
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="foremanUserId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Foreman</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Unassigned" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {usersData?.users.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    The foreman who lands on this project in the mobile daily update.
+                  </p>
+                </FormItem>
+              )}
+            />
 
             <div className="grid grid-cols-3 gap-4">
               <FormField

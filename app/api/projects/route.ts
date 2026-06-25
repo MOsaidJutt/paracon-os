@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
       include: {
         client: { select: { id: true, name: true } },
         pmUser: { select: { id: true, name: true } },
+        foremanUser: { select: { id: true, name: true } },
       },
     });
 
@@ -70,10 +71,12 @@ export async function POST(req: NextRequest) {
         endDate: body.endDate,
         clientId: body.clientId,
         pmUserId: body.pmUserId,
+        foremanUserId: body.foremanUserId,
       },
       include: {
         client: { select: { id: true, name: true } },
         pmUser: { select: { id: true, name: true } },
+        foremanUser: { select: { id: true, name: true } },
       },
     });
 

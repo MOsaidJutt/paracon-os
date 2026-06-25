@@ -7,6 +7,9 @@ export const PERMISSION_GROUPS = {
   compliance: ["compliance.manage"],
   allocation: ["allocation.edit"],
   site: ["site.update"],
+  document: ["doc.view", "doc.edit", "doc.generate"],
+  finance: ["finance.view", "finance.edit", "finance.approve"],
+  import: ["import.run"],
   dashboard: ["dashboard.director", "dashboard.pm"],
   admin: [
     "admin.users",

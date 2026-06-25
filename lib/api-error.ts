@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { BadRequestError, ForbiddenError, NotFoundError, UnauthorisedError } from "./errors";
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, UnauthorisedError } from "./errors";
 
 /** Maps a thrown error to the correct HTTP response per the API security rules. */
 export function toErrorResponse(error: unknown): NextResponse {
@@ -15,6 +15,9 @@ export function toErrorResponse(error: unknown): NextResponse {
   }
   if (error instanceof BadRequestError) {
     return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+  if (error instanceof ConflictError) {
+    return NextResponse.json({ error: error.message }, { status: 409 });
   }
   if (error instanceof ZodError) {
     return NextResponse.json(
