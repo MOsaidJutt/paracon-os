@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
         employmentType: body.employmentType,
         status: body.status ?? "Available",
         baseLocation: body.baseLocation,
+        isKeyStaff: body.isKeyStaff ?? false,
         performance: { create: {} },
       },
       include: { performance: true },

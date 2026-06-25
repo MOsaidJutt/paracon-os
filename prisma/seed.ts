@@ -4,7 +4,10 @@ import { encrypt } from "../lib/crypto";
 import { PERMISSION_GROUPS } from "../lib/permissions";
 import { PERMISSION_LABELS, ROLE_DEFINITIONS, MODULES, CONFIG_DEFAULTS } from "../lib/seed-data";
 import { computeComplianceStatus } from "../lib/labour/compliance";
-import { startOfIsoWeek } from "../lib/dates";
+import { startOfIsoWeek, startOfMonth, addMonths } from "../lib/dates";
+import { recomputeProductivity } from "../lib/scorecard/productivity-service";
+import { loadScorecardConfig } from "../lib/scorecard/config";
+import { calcOverallScore } from "../lib/scorecard/calc";
 import { deriveTenderComputedFields, loadTenderConfig } from "../lib/tenders/config";
 import { defaultDocumentTemplateConfig } from "../lib/documents/templates-config";
 import { calcRetentionForClaim } from "../lib/finance/retention";
@@ -50,6 +53,7 @@ type DemoWorker = {
   skills: { skill: string; level: number }[];
   compliance: DemoCompliance[];
   leave?: { startDate: Date; endDate: Date; reason: string };
+  isKeyStaff?: boolean;
 };
 
 const today = new Date();
@@ -68,6 +72,7 @@ const DEMO_WORKERS: DemoWorker[] = [
     employmentType: "Direct Employee",
     status: "Available",
     baseLocation: "North Melbourne",
+    isKeyStaff: true,
     performance: { quality: 4.5, reliability: 5, productivity: 4.5, safety: 5 },
     skills: [
       { skill: "Fit-out Carpentry", level: 5 },
@@ -85,6 +90,7 @@ const DEMO_WORKERS: DemoWorker[] = [
     employmentType: "Direct Employee",
     status: "Assigned",
     baseLocation: "Brunswick",
+    isKeyStaff: true,
     performance: { quality: 4.5, reliability: 4, productivity: 4.5, safety: 4.5 },
     skills: [
       { skill: "Fit-out Carpentry", level: 5 },
@@ -575,6 +581,7 @@ async function main() {
             employmentType: demoWorker.employmentType,
             status: demoWorker.status,
             baseLocation: demoWorker.baseLocation,
+            isKeyStaff: demoWorker.isKeyStaff ?? false,
           },
         })
       : await prisma.worker.create({
@@ -586,6 +593,7 @@ async function main() {
             employmentType: demoWorker.employmentType,
             status: demoWorker.status,
             baseLocation: demoWorker.baseLocation,
+            isKeyStaff: demoWorker.isKeyStaff ?? false,
           },
         });
 
@@ -1018,7 +1026,7 @@ async function main() {
   for (const workerName of CREW_NAMES) {
     const workerId = workerIdByName.get(workerName);
     if (!workerId) throw new Error(`Unknown demo worker "${workerName}"`);
-    await prisma.attendance.create({ data: { dailySiteUpdateId: yesterdayUpdate.id, workerId, present: true } });
+    await prisma.attendance.create({ data: { dailySiteUpdateId: yesterdayUpdate.id, workerId, present: true, hours: 8 } });
   }
   await prisma.taskProgress.create({
     data: {
@@ -1264,6 +1272,48 @@ async function main() {
       issuedAt: daysAgo(10),
     },
   });
+
+  // Phase 11 Productivity & Staff Scorecard demo data — recompute this
+  // month's ProductivityRecord from the attendance/program data seeded
+  // above, then give the two key-staff workers (Marcus Webb, Daniel Okafor)
+  // a few months of StaffScore history so the trend isn't empty on first load.
+  console.log("Seeding Productivity & Staff Scorecard demo data...");
+  await recomputeProductivity(org.id, today);
+
+  const directorUser = await prisma.user.findFirstOrThrow({
+    where: { organisationId: org.id, email: "director@paracon.com.au" },
+  });
+  const scorecardConfig = await loadScorecardConfig(org.id);
+
+  const KEY_STAFF_HISTORY: { workerName: string; monthsAgo: number; scores: Record<string, number>; locked: boolean }[] = [
+    { workerName: "Marcus Webb", monthsAgo: 2, scores: { quality: 4.5, reliability: 4.5, productivity: 4, safety: 5 }, locked: true },
+    { workerName: "Marcus Webb", monthsAgo: 1, scores: { quality: 4.5, reliability: 5, productivity: 4.5, safety: 5 }, locked: true },
+    { workerName: "Marcus Webb", monthsAgo: 0, scores: { quality: 4.5, reliability: 5, productivity: 4.5, safety: 5 }, locked: false },
+    { workerName: "Daniel Okafor", monthsAgo: 2, scores: { quality: 4, reliability: 3.5, productivity: 4, safety: 4 }, locked: true },
+    { workerName: "Daniel Okafor", monthsAgo: 1, scores: { quality: 4.5, reliability: 4, productivity: 4.5, safety: 4.5 }, locked: true },
+    { workerName: "Daniel Okafor", monthsAgo: 0, scores: { quality: 4.5, reliability: 4, productivity: 4.5, safety: 4.5 }, locked: false },
+  ];
+
+  for (const entry of KEY_STAFF_HISTORY) {
+    const workerId = workerIdByName.get(entry.workerName);
+    if (!workerId) throw new Error(`Unknown demo worker "${entry.workerName}"`);
+    const period = startOfMonth(addMonths(today, -entry.monthsAgo));
+    const overallScore = calcOverallScore(entry.scores, scorecardConfig.metrics);
+
+    await prisma.staffScore.upsert({
+      where: { organisationId_workerId_period: { organisationId: org.id, workerId, period } },
+      update: { metricScoresJson: entry.scores, overallScore, assessedByUserId: directorUser.id, lockedAt: entry.locked ? daysAgo(1) : null },
+      create: {
+        organisationId: org.id,
+        workerId,
+        period,
+        metricScoresJson: entry.scores,
+        overallScore,
+        assessedByUserId: directorUser.id,
+        lockedAt: entry.locked ? daysAgo(1) : null,
+      },
+    });
+  }
 
   // Platform org — hosts the Super Admin account, kept separate from any
   // tenant so "which org does this user belong to" never gets ambiguous

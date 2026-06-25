@@ -52,6 +52,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         employmentType: body.employmentType,
         status: body.status,
         baseLocation: body.baseLocation,
+        isKeyStaff: body.isKeyStaff,
       },
       include: { performance: true },
     });
@@ -62,8 +63,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       action: "worker.update",
       entityType: "Worker",
       entityId: worker.id,
-      before: { status: existing.status, capability: existing.capability },
-      after: { status: worker.status, capability: worker.capability },
+      before: { status: existing.status, capability: existing.capability, isKeyStaff: existing.isKeyStaff },
+      after: { status: worker.status, capability: worker.capability, isKeyStaff: worker.isKeyStaff },
     });
     await sendEvent("forecast/recompute.requested");
 

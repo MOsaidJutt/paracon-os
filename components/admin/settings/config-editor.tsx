@@ -8,11 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+type MetricEntry = { key: string; label: string; weight: number; scaleMax: number; source: "AUTO" | "MANUAL" };
 
 type ConfigEntry = {
   key: string;
   group: string;
-  type: "LIST" | "NUMBER" | "WEIGHTS" | "BANDS" | "TEXT";
+  type: "LIST" | "NUMBER" | "WEIGHTS" | "BANDS" | "TEXT" | "METRICS";
   label: string;
   description: string;
   value: unknown;
@@ -134,6 +137,61 @@ function ConfigCard({
                     )
                   }
                 />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* `key` is intentionally not editable here — it's the auto-fill mapping and the storage key inside every past StaffScore.metricScoresJson; renaming it would orphan history. Add/remove rows from the database directly if the metric set itself needs to change. */}
+        {entry.type === "METRICS" && (
+          <div className="flex flex-col gap-2">
+            {(draft as MetricEntry[]).map((metric, i) => (
+              <div key={metric.key} className="grid grid-cols-[1fr_5rem_5rem_7rem] items-center gap-2">
+                <Input
+                  value={metric.label}
+                  onChange={(e) =>
+                    setDraft((current: MetricEntry[]) =>
+                      current.map((m, idx) => (idx === i ? { ...m, label: e.target.value } : m))
+                    )
+                  }
+                />
+                <Input
+                  type="number"
+                  step="0.05"
+                  placeholder="Weight"
+                  value={metric.weight}
+                  onChange={(e) =>
+                    setDraft((current: MetricEntry[]) =>
+                      current.map((m, idx) => (idx === i ? { ...m, weight: Number(e.target.value) } : m))
+                    )
+                  }
+                />
+                <Input
+                  type="number"
+                  placeholder="Scale max"
+                  value={metric.scaleMax}
+                  onChange={(e) =>
+                    setDraft((current: MetricEntry[]) =>
+                      current.map((m, idx) => (idx === i ? { ...m, scaleMax: Number(e.target.value) } : m))
+                    )
+                  }
+                />
+                <Select
+                  value={metric.source}
+                  onValueChange={(value) =>
+                    setDraft((current: MetricEntry[]) =>
+                      current.map((m, idx) => (idx === i ? { ...m, source: value as "AUTO" | "MANUAL" } : m))
+                    )
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AUTO">Auto</SelectItem>
+                    <SelectItem value="MANUAL">Manual</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             ))}
           </div>

@@ -16,6 +16,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   "compliance.manage": "Manage compliance documents",
   "allocation.edit": "Edit resource allocation",
   "site.update": "Submit site daily updates",
+  "scorecard.view": "View staff scorecards",
+  "scorecard.assess": "Assess monthly staff scorecards",
   "doc.view": "View documents (stored & linked)",
   "doc.edit": "Upload, version, link & tag documents",
   "doc.generate": "Generate tender letters, variations & progress claims",
@@ -55,6 +57,7 @@ export const ROLE_DEFINITIONS = [
       ...PERMISSION_GROUPS.document,
       ...PERMISSION_GROUPS.finance,
       ...PERMISSION_GROUPS.import,
+      ...PERMISSION_GROUPS.scorecard,
     ],
   },
   {
@@ -76,12 +79,14 @@ export const ROLE_DEFINITIONS = [
       "finance.view",
       "finance.edit",
       "finance.approve",
+      "scorecard.view",
+      "scorecard.assess",
     ],
   },
   {
     slug: "site-foreman",
     name: "Site Foreman",
-    permissions: ["site.update", "doc.view", "doc.edit"],
+    permissions: ["site.update", "doc.view", "doc.edit", "scorecard.view"],
   },
   {
     slug: "estimator",
@@ -94,12 +99,21 @@ export const ROLE_DEFINITIONS = [
       "doc.edit",
       "doc.generate",
       "import.run",
+      "scorecard.view",
     ],
   },
   {
     slug: "viewer",
     name: "Viewer",
-    permissions: ["project.view", "tender.view", "forecast.view", "dashboard.pm", "doc.view", "finance.view"],
+    permissions: [
+      "project.view",
+      "tender.view",
+      "forecast.view",
+      "dashboard.pm",
+      "doc.view",
+      "finance.view",
+      "scorecard.view",
+    ],
   },
 ] as const;
 
@@ -299,6 +313,29 @@ export const CONFIG_DEFAULTS = [
     label: "Compliance expiring threshold (days)",
     description: "A compliance document is flagged Expiring once its expiry date is within this many days.",
     valueJson: 30,
+  },
+  {
+    key: "productivity.standardHoursPerDay",
+    group: "productivity",
+    type: "NUMBER" as const,
+    label: "Standard hours per day",
+    description: "Hours per crew-day used to convert a program activity's planned headcount into planned labour hours.",
+    valueJson: 8,
+  },
+  {
+    key: "scorecard.metrics",
+    group: "productivity",
+    type: "METRICS" as const,
+    label: "Staff Scorecard metrics",
+    description:
+      "The 3-5 weighted metrics scored on the monthly Staff Scorecard. AUTO metrics are computed from daily " +
+      "updates/allocations; MANUAL metrics are entered by the assessing Director/PM.",
+    valueJson: [
+      { key: "quality", label: "Quality", weight: 0.25, scaleMax: 5, source: "MANUAL" },
+      { key: "reliability", label: "Reliability", weight: 0.25, scaleMax: 5, source: "AUTO" },
+      { key: "productivity", label: "Productivity", weight: 0.25, scaleMax: 5, source: "AUTO" },
+      { key: "safety", label: "Safety", weight: 0.25, scaleMax: 5, source: "MANUAL" },
+    ],
   },
   {
     key: "branding.accentSwatches",

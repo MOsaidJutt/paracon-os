@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { SkillsMatrixGrid } from "@/components/labour/skills-matrix-grid";
 import { RecomputeComplianceButton } from "@/components/labour/recompute-compliance-button";
+import { Button } from "@/components/ui/button";
 
 export default async function LabourPage() {
   const session = await auth();
@@ -15,7 +17,12 @@ export default async function LabourPage() {
             Worker capability, skills and compliance status at a glance.
           </p>
         </div>
-        {canManageCompliance && <RecomputeComplianceButton />}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/labour/productivity">Productivity</Link>
+          </Button>
+          {canManageCompliance && <RecomputeComplianceButton />}
+        </div>
       </div>
       <SkillsMatrixGrid />
     </div>

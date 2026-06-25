@@ -15,8 +15,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { LabourConfig } from "@/lib/labour/config";
 
@@ -28,6 +29,7 @@ export type WorkerRow = {
   employmentType: string;
   status: string;
   baseLocation: string | null;
+  isKeyStaff?: boolean;
 };
 
 const formSchema = z.object({
@@ -37,6 +39,7 @@ const formSchema = z.object({
   employmentType: z.string().min(1, "Employment type is required"),
   status: z.string().min(1, "Status is required"),
   baseLocation: z.string().optional(),
+  isKeyStaff: z.boolean(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -48,6 +51,7 @@ const EMPTY_DEFAULTS: FormValues = {
   employmentType: "",
   status: "Available",
   baseLocation: "",
+  isKeyStaff: false,
 };
 
 function toFormValues(worker: WorkerRow): FormValues {
@@ -58,6 +62,7 @@ function toFormValues(worker: WorkerRow): FormValues {
     employmentType: worker.employmentType,
     status: worker.status,
     baseLocation: worker.baseLocation ?? "",
+    isKeyStaff: worker.isKeyStaff ?? false,
   };
 }
 
@@ -238,6 +243,22 @@ export function WorkerFormSheet({
                   <FormLabel>Base location</FormLabel>
                   <FormControl>
                     <Input placeholder="North Melbourne" {...field} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="isKeyStaff"
+              render={({ field }) => (
+                <FormItem className="flex items-center justify-between rounded-md border p-3">
+                  <div>
+                    <FormLabel>Key staff</FormLabel>
+                    <FormDescription>Foremen, lead carpenters, etc. — included in the monthly Staff Scorecard.</FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
                   </FormControl>
                 </FormItem>
               )}

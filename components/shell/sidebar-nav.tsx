@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutDashboard, ShieldCheck, Building2, FileSpreadsheet, HardHat, Users, Gauge, UploadCloud, Wallet, CalendarRange, ClipboardList } from "lucide-react";
+import { LayoutDashboard, ShieldCheck, Building2, FileSpreadsheet, HardHat, Users, Gauge, UploadCloud, Wallet, CalendarRange, ClipboardList, Star } from "lucide-react";
 import { NavItem } from "./nav-item";
 
 export function SidebarNav({ permissions }: { permissions: string[] }) {
@@ -14,6 +14,7 @@ export function SidebarNav({ permissions }: { permissions: string[] }) {
   const canRunImports = permissions.includes("import.run");
   const canViewFinance = permissions.includes("finance.view");
   const canUpdateSite = permissions.includes("site.update");
+  const canViewScorecard = permissions.includes("scorecard.view");
 
   return (
     <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
@@ -22,6 +23,7 @@ export function SidebarNav({ permissions }: { permissions: string[] }) {
       {canViewTenders && <NavItem href="/tenders" label="Tenders" icon={FileSpreadsheet} />}
       {canViewProjects && <NavItem href="/projects" label="Projects" icon={HardHat} />}
       {canViewLabour && <NavItem href="/labour" label="Labour" icon={Users} />}
+      {canViewScorecard && <NavItem href="/scorecard" label="Scorecard" icon={Star} />}
       {canViewForecast && <NavItem href="/forecast" label="Forecast" icon={Gauge} />}
       {canEditAllocation && <NavItem href="/allocation" label="Resource Planner" icon={CalendarRange} />}
       {canViewFinance && <NavItem href="/finance" label="Finance" icon={Wallet} />}

@@ -9,6 +9,7 @@ export const createWorkerSchema = z.object({
   employmentType: z.string().min(1, "Employment type is required"),
   status: z.string().min(1).optional(),
   baseLocation: z.string().max(200).optional().nullable(),
+  isKeyStaff: z.boolean().optional(),
 });
 
 export const updateWorkerSchema = z.object({
@@ -18,6 +19,7 @@ export const updateWorkerSchema = z.object({
   employmentType: z.string().min(1).optional(),
   status: z.string().min(1).optional(),
   baseLocation: z.string().max(200).optional().nullable(),
+  isKeyStaff: z.boolean().optional(),
 });
 
 export const listWorkersQuerySchema = z.object({

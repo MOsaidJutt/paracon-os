@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Pencil } from "lucide-react";
+import { Pencil, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -72,6 +73,7 @@ export function WorkerProfile({ workerId }: { workerId: string }) {
               <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">{worker.name}</h1>
               <Badge variant={statusVariant(worker.status)}>{worker.status}</Badge>
               <ComplianceBadge status={worstCompliance} expiryDate={null} />
+              {worker.isKeyStaff && <Badge variant="outline">Key staff</Badge>}
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
               {worker.capability} &middot; {worker.employmentType}
@@ -97,29 +99,51 @@ export function WorkerProfile({ workerId }: { workerId: string }) {
         </TabsList>
 
         <TabsContent value="overview" className="grid gap-4 sm:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Performance</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PerformanceRadar
-                scores={
-                  worker.performance ?? { quality: 0, reliability: 0, productivity: 0, safety: 0 }
-                }
-              />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Update scores</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PerformanceEditor
-                workerId={worker.id}
-                initial={worker.performance ?? { quality: 0, reliability: 0, productivity: 0, safety: 0 }}
-              />
-            </CardContent>
-          </Card>
+          {worker.isKeyStaff ? (
+            <Card className="sm:col-span-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Star className="size-4 text-muted-foreground" />
+                  Tracked in the Staff Scorecard
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  As key staff, {worker.name}&apos;s Quality, Reliability, Productivity and Safety are
+                  assessed monthly on the Staff Scorecard, not here, so there&apos;s one place to set them.
+                </p>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/scorecard">Open Scorecard</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Performance</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <PerformanceRadar
+                    scores={
+                      worker.performance ?? { quality: 0, reliability: 0, productivity: 0, safety: 0 }
+                    }
+                  />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Update scores</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <PerformanceEditor
+                    workerId={worker.id}
+                    initial={worker.performance ?? { quality: 0, reliability: 0, productivity: 0, safety: 0 }}
+                  />
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="compliance">
