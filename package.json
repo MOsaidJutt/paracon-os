@@ -10,6 +10,7 @@
     "db:seed": "tsx -r dotenv/config prisma/seed.ts",
     "db:migrate": "prisma migrate dev",
     "dev:storage": "tsx -r dotenv/config scripts/dev-storage.ts",
+    "dev:all": "tsx -r dotenv/config scripts/dev-all.ts",
     "test": "vitest run",
     "test:e2e": "playwright test"
   },
