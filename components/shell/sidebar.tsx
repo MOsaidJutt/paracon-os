@@ -15,7 +15,9 @@ export function Sidebar({ permissions }: { permissions: string[] }) {
         />
       </div>
       <SidebarNav permissions={permissions} />
-      <div className="px-5 py-4 text-xs text-paper/55">Build in Parallel</div>
+      <div className="px-5 py-4 text-xs leading-relaxed text-paper/55">
+        One Team. One Standard. One Process. One Source of Truth.
+      </div>
     </aside>
   );
 }

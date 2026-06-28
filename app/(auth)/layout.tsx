@@ -25,7 +25,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         />
       </div>
       {children}
-      <p className="mt-8 text-xs text-muted-foreground">Build in Parallel</p>
+      <p className="mt-8 max-w-xs text-center text-xs text-muted-foreground">
+        One Team. One Standard. One Process. One Source of Truth.
+      </p>
     </div>
   );
 }
