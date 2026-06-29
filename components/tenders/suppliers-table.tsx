@@ -5,7 +5,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { MoreHorizontal, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +20,7 @@ export function SuppliersTable() {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<SupplierRow | null>(null);
+  const [kindFilter, setKindFilter] = useState<string>("All");
 
   const { data, isLoading } = useQuery({
     queryKey: ["suppliers"],
@@ -27,6 +30,8 @@ export function SuppliersTable() {
       return (await res.json()) as { suppliers: SupplierRow[] };
     },
   });
+
+  const suppliers = (data?.suppliers ?? []).filter((s) => kindFilter === "All" || s.kind === kindFilter);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -45,8 +50,17 @@ export function SuppliersTable() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">{data?.suppliers.length ?? 0} suppliers</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <p className="text-sm text-muted-foreground">{suppliers.length} of {data?.suppliers.length ?? 0}</p>
+          <Tabs value={kindFilter} onValueChange={setKindFilter}>
+            <TabsList>
+              <TabsTrigger value="All">All</TabsTrigger>
+              <TabsTrigger value="Supplier">Suppliers</TabsTrigger>
+              <TabsTrigger value="Subcontractor">Subcontractors</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
         <Button
           size="sm"
           onClick={() => {
@@ -63,6 +77,7 @@ export function SuppliersTable() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>Kind</TableHead>
               <TableHead>Trade</TableHead>
               <TableHead>Company</TableHead>
               <TableHead>Contact</TableHead>
@@ -74,13 +89,16 @@ export function SuppliersTable() {
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground">
+                <TableCell colSpan={7} className="text-center text-muted-foreground">
                   Loading...
                 </TableCell>
               </TableRow>
             )}
-            {data?.suppliers.map((supplier) => (
+            {suppliers.map((supplier) => (
               <TableRow key={supplier.id}>
+                <TableCell>
+                  <Badge variant={supplier.kind === "Subcontractor" ? "default" : "secondary"}>{supplier.kind}</Badge>
+                </TableCell>
                 <TableCell className="font-medium text-foreground">{supplier.trade}</TableCell>
                 <TableCell>{supplier.company}</TableCell>
                 <TableCell className="text-muted-foreground">{supplier.contact ?? "—"}</TableCell>

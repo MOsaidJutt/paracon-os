@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,7 +17,9 @@ import {
 } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import type { SupplierConfig } from "@/lib/suppliers/config";
 
 export type SupplierRow = {
   id: string;
@@ -27,6 +29,7 @@ export type SupplierRow = {
   email: string | null;
   phone: string | null;
   comments: string | null;
+  kind: string;
 };
 
 const formSchema = z.object({
@@ -36,6 +39,7 @@ const formSchema = z.object({
   email: z.string().email("Invalid email").optional().or(z.literal("")),
   phone: z.string().optional(),
   comments: z.string().optional(),
+  kind: z.string().min(1, "Kind is required"),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -48,6 +52,7 @@ function toFormValues(supplier?: SupplierRow | null): FormValues {
     email: supplier?.email ?? "",
     phone: supplier?.phone ?? "",
     comments: supplier?.comments ?? "",
+    kind: supplier?.kind ?? "Supplier",
   };
 }
 
@@ -62,6 +67,15 @@ export function SupplierFormDialog({
 }) {
   const queryClient = useQueryClient();
   const isEdit = !!supplier;
+
+  const { data: config } = useQuery({
+    queryKey: ["suppliers", "config"],
+    queryFn: async () => {
+      const res = await fetch("/api/suppliers/config");
+      if (!res.ok) throw new Error("Failed to load supplier config");
+      return (await res.json()) as SupplierConfig;
+    },
+  });
 
   const form = useForm<FormValues>({ resolver: zodResolver(formSchema), defaultValues: toFormValues() });
 
@@ -103,6 +117,30 @@ export function SupplierFormDialog({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit((values) => mutation.mutate(values))} className="flex flex-col gap-4">
+            <FormField
+              control={form.control}
+              name="kind"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Kind</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select kind" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {(config?.kindList ?? ["Supplier", "Subcontractor"]).map((k) => (
+                        <SelectItem key={k} value={k}>
+                          {k}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}

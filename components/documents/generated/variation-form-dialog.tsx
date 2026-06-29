@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { CommandDialog, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import type { ClientOption } from "@/components/contacts/client-combobox";
 import type { GeneratedDocumentRow } from "./types";
 
 type LineItem = { item: number; description: string; amount: number };
@@ -50,6 +52,19 @@ export function VariationFormDialog({
 }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<VariationSnapshotLike>(EMPTY);
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
+
+  // Pulls from the same shared Contacts database as everywhere else, so
+  // picking a different addressee here is a search, never a re-type.
+  const { data: clientsData } = useQuery({
+    queryKey: ["contacts", "clients"],
+    enabled: clientPickerOpen,
+    queryFn: async () => {
+      const res = await fetch("/api/clients");
+      if (!res.ok) throw new Error("Failed to load clients");
+      return (await res.json()) as { clients: ClientOption[] };
+    },
+  });
 
   // Enter-once: the variation is almost always addressed to this project's
   // head contractor, so default "Company" from the client already on file
@@ -149,7 +164,23 @@ export function VariationFormDialog({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="variation-company">Company</Label>
-              <Input id="variation-company" value={form.company} onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))} />
+              <div className="flex gap-1.5">
+                <Input
+                  id="variation-company"
+                  className="flex-1"
+                  value={form.company}
+                  onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Search contacts"
+                  onClick={() => setClientPickerOpen(true)}
+                >
+                  <Search className="size-4" />
+                </Button>
+              </div>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="variation-cc">Cc</Label>
@@ -243,6 +274,25 @@ export function VariationFormDialog({
             {mutation.isPending ? "Generating..." : existing ? "Regenerate" : "Generate"}
           </Button>
         </SheetFooter>
+
+        <CommandDialog open={clientPickerOpen} onOpenChange={setClientPickerOpen}>
+          <CommandInput placeholder="Search clients..." />
+          <CommandList>
+            <CommandEmpty>No clients found.</CommandEmpty>
+            {(clientsData?.clients ?? []).map((client) => (
+              <CommandItem
+                key={client.id}
+                value={client.name}
+                onSelect={() => {
+                  setForm((f) => ({ ...f, company: client.name }));
+                  setClientPickerOpen(false);
+                }}
+              >
+                {client.name}
+              </CommandItem>
+            ))}
+          </CommandList>
+        </CommandDialog>
       </SheetContent>
     </Sheet>
   );

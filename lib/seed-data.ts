@@ -143,6 +143,14 @@ export const CONFIG_DEFAULTS = [
     valueJson: ["Cold", "Warm"],
   },
   {
+    key: "supplier.kindList",
+    group: "supplier",
+    type: "LIST" as const,
+    label: "Supplier kinds",
+    description: "Category options for a supplier — supplier (materials/hire) or subcontractor (trade labour).",
+    valueJson: ["Supplier", "Subcontractor"],
+  },
+  {
     key: "tender.statusList",
     group: "tender",
     type: "LIST" as const,

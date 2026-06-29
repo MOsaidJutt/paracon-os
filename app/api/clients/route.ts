@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/rbac";
+import { requireAnyPermission, requirePermission } from "@/lib/rbac";
 import { getTenantContext } from "@/lib/tenant";
 import { auditLog } from "@/lib/audit";
 import { toErrorResponse } from "@/lib/api-error";
@@ -7,9 +7,10 @@ import { BadRequestError } from "@/lib/errors";
 import { createClientSchema } from "@/lib/validations/client";
 import { loadTenderConfig } from "@/lib/tenders/config";
 
+/** Read is shared with Projects (project setup) — a single Contacts source, gated for everyone who legitimately needs it. */
 export async function GET() {
   try {
-    const session = await requirePermission("tender.view");
+    const session = await requireAnyPermission(["tender.view", "project.view", "finance.view"]);
     const db = getTenantContext(session.user.organisationId);
 
     const clients = await db.client.findMany({

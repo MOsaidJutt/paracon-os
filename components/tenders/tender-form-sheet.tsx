@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { DocumentsPanel } from "@/components/documents/documents-panel";
 import { TenderDocumentActions } from "@/components/documents/generated/tender-document-actions";
+import { ClientCombobox, type ClientOption } from "@/components/contacts/client-combobox";
 import type { TenderConfig } from "@/lib/tenders/config";
 
 export type TenderRow = {
@@ -47,8 +48,6 @@ export type TenderRow = {
   marginPct: number | null;
   project?: { id: string; code: string } | null;
 };
-
-type ClientOption = { id: string; name: string; contacts: { id: string; name: string }[] };
 
 const formSchema = z.object({
   projectName: z.string().min(1, "Project name is required"),
@@ -140,7 +139,7 @@ export function TenderFormSheet({
   });
 
   const { data: clientsData } = useQuery({
-    queryKey: ["clients"],
+    queryKey: ["contacts", "clients"],
     queryFn: async () => {
       const res = await fetch("/api/clients");
       if (!res.ok) throw new Error("Failed to load clients");
@@ -259,20 +258,9 @@ export function TenderFormSheet({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Client</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select client" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {clientsData?.clients.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <ClientCombobox value={field.value} onChange={(id) => field.onChange(id)} placeholder="Select client" />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

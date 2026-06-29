@@ -408,6 +408,10 @@ model Supplier {
   email          String?
   phone          String?
   comments       String?
+  // "Supplier" (materials/hire) or "Subcontractor" (trade labour) — same
+  // record shape either way (trade/company/contact), just a different
+  // category in the Contacts directory (config-driven, supplier.kindList).
+  kind           String       @default("Supplier")
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -417,6 +421,7 @@ model Supplier {
 
   @@unique([organisationId, company, contact])
   @@index([organisationId, trade])
+  @@index([organisationId, kind])
 }
 
 model Tender {

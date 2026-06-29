@@ -8,9 +8,9 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SupplierCombobox } from "@/components/contacts/supplier-combobox";
 import type { FinanceConfig } from "@/lib/finance/config";
 
-type Supplier = { id: string; company: string };
 type PurchaseOrder = { id: string; number: string };
 
 export function DeliveryFormSheet({
@@ -40,16 +40,6 @@ export function DeliveryFormSheet({
       setDescription("");
     }
   }, [open]);
-
-  const { data: suppliersData } = useQuery({
-    queryKey: ["finance", "suppliers"],
-    enabled: open,
-    queryFn: async () => {
-      const res = await fetch("/api/finance/suppliers");
-      if (!res.ok) throw new Error("Failed to load suppliers");
-      return (await res.json()) as { suppliers: Supplier[] };
-    },
-  });
 
   const { data: posData } = useQuery({
     queryKey: ["finance", "purchase-orders", projectId],
@@ -125,18 +115,7 @@ export function DeliveryFormSheet({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="delivery-supplier">Supplier</Label>
-              <Select value={supplierId} onValueChange={setSupplierId}>
-                <SelectTrigger id="delivery-supplier">
-                  <SelectValue placeholder="Select supplier" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(suppliersData?.suppliers ?? []).map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.company}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SupplierCombobox id="delivery-supplier" value={supplierId} onChange={setSupplierId} placeholder="Select supplier" />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="delivery-status">Status</Label>

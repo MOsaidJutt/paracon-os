@@ -9,9 +9,9 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SupplierCombobox } from "@/components/contacts/supplier-combobox";
 import type { FinanceConfig } from "@/lib/finance/config";
 
-type Supplier = { id: string; company: string };
 type LineItem = { description: string; quantity: number; unit: string; unitRate: number; amount: number };
 
 export function PurchaseOrderFormSheet({
@@ -37,16 +37,6 @@ export function PurchaseOrderFormSheet({
       setItems([{ description: "", quantity: 1, unit: "ea", unitRate: 0, amount: 0 }]);
     }
   }, [open]);
-
-  const { data: suppliersData } = useQuery({
-    queryKey: ["finance", "suppliers"],
-    enabled: open,
-    queryFn: async () => {
-      const res = await fetch("/api/finance/suppliers");
-      if (!res.ok) throw new Error("Failed to load suppliers");
-      return (await res.json()) as { suppliers: Supplier[] };
-    },
-  });
 
   const { data: config } = useQuery({
     queryKey: ["finance", "config"],
@@ -111,18 +101,7 @@ export function PurchaseOrderFormSheet({
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="po-supplier">Supplier</Label>
-              <Select value={supplierId} onValueChange={setSupplierId}>
-                <SelectTrigger id="po-supplier">
-                  <SelectValue placeholder="Select supplier" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(suppliersData?.suppliers ?? []).map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.company}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SupplierCombobox id="po-supplier" value={supplierId} onChange={setSupplierId} placeholder="Select supplier" />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="po-status">Status</Label>

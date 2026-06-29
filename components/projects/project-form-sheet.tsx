@@ -18,6 +18,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ClientCombobox } from "@/components/contacts/client-combobox";
 import type { ProjectConfig } from "@/lib/projects/config";
 
 export type ProjectRow = {
@@ -34,7 +35,6 @@ export type ProjectRow = {
   foremanUserId: string | null;
 };
 
-type ClientOption = { id: string; name: string };
 type UserOption = { id: string; name: string };
 
 const formSchema = z.object({
@@ -98,15 +98,6 @@ export function ProjectFormSheet({
       const res = await fetch("/api/projects/config");
       if (!res.ok) throw new Error("Failed to load project config");
       return (await res.json()) as ProjectConfig;
-    },
-  });
-
-  const { data: clientsData } = useQuery({
-    queryKey: ["clients"],
-    queryFn: async () => {
-      const res = await fetch("/api/clients");
-      if (!res.ok) throw new Error("Failed to load clients");
-      return (await res.json()) as { clients: ClientOption[] };
     },
   });
 
@@ -238,20 +229,9 @@ export function ProjectFormSheet({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Client</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select client" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {clientsData?.clients.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <ClientCombobox value={field.value} onChange={(id) => field.onChange(id)} placeholder="Select client" />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

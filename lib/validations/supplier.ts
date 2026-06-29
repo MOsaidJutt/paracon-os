@@ -7,6 +7,7 @@ export const createSupplierSchema = z.object({
   email: z.string().email("Invalid email").optional().nullable().or(z.literal("")),
   phone: z.string().max(40).optional().nullable(),
   comments: z.string().max(500).optional().nullable(),
+  kind: z.string().min(1, "Kind is required"),
 });
 
 export const updateSupplierSchema = createSupplierSchema.partial();

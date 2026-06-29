@@ -8,9 +8,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SupplierCombobox } from "@/components/contacts/supplier-combobox";
 
 type Project = { id: string; name: string; code: string };
-type Supplier = { id: string; company: string };
 
 export function CreateBillDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const queryClient = useQueryClient();
@@ -41,16 +41,6 @@ export function CreateBillDialog({ open, onOpenChange }: { open: boolean; onOpen
       const res = await fetch("/api/projects");
       if (!res.ok) throw new Error("Failed to load projects");
       return (await res.json()) as { projects: Project[] };
-    },
-  });
-
-  const { data: suppliersData } = useQuery({
-    queryKey: ["finance", "suppliers"],
-    enabled: open,
-    queryFn: async () => {
-      const res = await fetch("/api/finance/suppliers");
-      if (!res.ok) throw new Error("Failed to load suppliers");
-      return (await res.json()) as { suppliers: Supplier[] };
     },
   });
 
@@ -144,18 +134,7 @@ export function CreateBillDialog({ open, onOpenChange }: { open: boolean; onOpen
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="create-bill-supplier">Supplier</Label>
-              <Select value={supplierId} onValueChange={setSupplierId}>
-                <SelectTrigger id="create-bill-supplier">
-                  <SelectValue placeholder="Select supplier" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(suppliersData?.suppliers ?? []).map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.company}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SupplierCombobox id="create-bill-supplier" value={supplierId} onChange={setSupplierId} placeholder="Select supplier" />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="bill-invoice-number">Invoice number</Label>
