@@ -6,10 +6,10 @@ import { auditLog } from "@/lib/audit";
 import { BadRequestError } from "@/lib/errors";
 import { documentTemplateConfigSchemaByType, isDocumentTemplateType } from "@/lib/validations/document-template";
 
-/** Saves an org's override for one document template's generation config (scope library / qualifications / PDF colours). */
+/** Saves an org's override for one document template's generation config (scope library / qualifications / PDF colours). Gated by doc.edit — Estimator owns Tender Letter, PM owns Variation/Progress Claim. */
 export async function PATCH(req: NextRequest, { params }: { params: { type: string } }) {
   try {
-    const session = await requirePermission("admin.settings");
+    const session = await requirePermission("doc.edit");
     const db = getTenantContext(session.user.organisationId);
 
     if (!isDocumentTemplateType(params.type)) throw new BadRequestError("Unknown document template type");

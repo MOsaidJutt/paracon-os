@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isSuperAdminFeatureEnabled } from "@/lib/flags";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
 import { ImpersonationBanner } from "@/components/shell/impersonation-banner";
@@ -19,9 +20,11 @@ export default async function ShellLayout({
   });
   if (!organisation) redirect("/login");
 
+  const superAdminEnabled = isSuperAdminFeatureEnabled();
+
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar permissions={session.user.permissions} />
+      <Sidebar permissions={session.user.permissions} superAdminEnabled={superAdminEnabled} />
       <div className="flex flex-1 flex-col overflow-hidden">
         {session.impersonatorId && (
           <ImpersonationBanner name={session.user.name ?? session.user.email ?? "user"} />
@@ -30,6 +33,7 @@ export default async function ShellLayout({
           orgName={organisation.name}
           logoUrl={organisation.logoUrl}
           permissions={session.user.permissions}
+          superAdminEnabled={superAdminEnabled}
           userName={session.user.name ?? session.user.email ?? "User"}
           userEmail={session.user.email ?? ""}
           role={session.user.role}

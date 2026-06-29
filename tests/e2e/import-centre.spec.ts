@@ -45,7 +45,7 @@ test("tender-tracker import: preview, commit, then a repeat run is an idempotent
     // The tender + client really landed in the register, not just a fake report.
     await page.goto("/tenders");
     await expect(page.getByText(projectName)).toBeVisible();
-    await page.goto("/tenders/clients");
+    await page.goto("/contacts/clients");
     await expect(page.getByText(clientName)).toBeVisible();
 
     // Re-running the exact same file is a safe, idempotent no-op — not a duplicate row.

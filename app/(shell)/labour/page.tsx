@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 export default async function LabourPage() {
   const session = await auth();
   const canManageCompliance = session?.user.permissions.includes("compliance.manage") ?? false;
+  const canViewScorecard = session?.user.permissions.includes("scorecard.view") ?? false;
 
   return (
     <div className="flex flex-col gap-8">
@@ -18,6 +19,11 @@ export default async function LabourPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {canViewScorecard && (
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/scorecard">Scorecard</Link>
+            </Button>
+          )}
           <Button variant="outline" size="sm" asChild>
             <Link href="/labour/productivity">Productivity</Link>
           </Button>

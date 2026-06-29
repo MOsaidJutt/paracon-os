@@ -13,7 +13,7 @@ export async function createE2EProject(page: Page, label: string): Promise<{ pro
   const clientName = `E2E ${label} Client ${suffix}`;
   const projectName = `E2E ${label} Project ${suffix}`;
 
-  await page.goto("/tenders/clients");
+  await page.goto("/contacts/clients");
   await page.getByRole("button", { name: "Add client" }).click();
   await page.getByLabel("Name").fill(clientName);
   await page.getByLabel("Status").click();
@@ -55,7 +55,7 @@ export async function createE2ETender(page: Page, label: string): Promise<{ tend
   const clientName = `E2E ${label} Client ${suffix}`;
   const tenderName = `E2E ${label} Tender ${suffix}`;
 
-  await page.goto("/tenders/clients");
+  await page.goto("/contacts/clients");
   await page.getByRole("button", { name: "Add client" }).click();
   await page.getByLabel("Name").fill(clientName);
   await page.getByLabel("Status").click();

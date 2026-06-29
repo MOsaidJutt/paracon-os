@@ -1,4 +1,5 @@
 export const PERMISSION_GROUPS = {
+  prospect: ["prospect.view", "prospect.edit"],
   tender: ["tender.view", "tender.edit"],
   project: ["project.view", "project.edit"],
   program: ["program.edit"],

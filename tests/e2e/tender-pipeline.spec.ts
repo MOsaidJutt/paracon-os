@@ -14,7 +14,7 @@ test("estimator can add a client and tender, and the dashboard updates", async (
   await expect(page.getByText("$0").first()).toBeVisible();
 
   // Add a client so the tender form has someone to bid to.
-  await page.goto("/tenders/clients");
+  await page.goto("/contacts/clients");
   await page.getByRole("button", { name: "Add client" }).click();
   await page.getByLabel("Name").fill("E2E Test Client");
   await page.getByLabel("Status").click();

@@ -1,17 +1,17 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { isAiFeatureEnabled } from "@/lib/flags";
 import { AdminTabs } from "@/components/admin/admin-tabs";
 
 const TABS = [
   { href: "/admin/users", label: "Users", permission: "admin.users" },
   { href: "/admin/roles", label: "Roles & Permissions", permission: "admin.roles" },
-  { href: "/admin/ai-settings", label: "AI Settings", permission: "admin.ai" },
-  { href: "/admin/ai-usage", label: "AI Usage", permission: "admin.ai" },
+  { href: "/admin/ai-settings", label: "AI Settings", permission: "admin.ai", flag: "ai" as const },
+  { href: "/admin/ai-usage", label: "AI Usage", permission: "admin.ai", flag: "ai" as const },
   { href: "/admin/modules", label: "Modules", permission: "admin.modules" },
   { href: "/admin/branding", label: "Branding", permission: "admin.branding" },
   { href: "/admin/audit", label: "Audit Log", permission: "admin.audit" },
   { href: "/admin/settings", label: "Settings", permission: "admin.settings" },
-  { href: "/admin/document-templates", label: "Document Templates", permission: "admin.settings" },
   { href: "/admin/mailbox", label: "Accounts Inbox", permission: "admin.settings" },
   { href: "/admin/billing", label: "Billing", permission: "admin.billing" },
 ];
@@ -20,7 +20,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const visibleTabs = TABS.filter((t) => session.user.permissions.includes(t.permission));
+  const aiEnabled = isAiFeatureEnabled();
+  const visibleTabs = TABS.filter(
+    (t) => session.user.permissions.includes(t.permission) && (t.flag !== "ai" || aiEnabled)
+  );
   if (visibleTabs.length === 0) redirect("/dashboard");
 
   return (

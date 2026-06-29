@@ -38,6 +38,7 @@ model Organisation {
   configs             Config[]
   clients             Client[]
   suppliers           Supplier[]
+  prospects           Prospect[]
   tenders             Tender[]
   projects            Project[]
   programActivities   ProgramActivity[]
@@ -459,7 +460,8 @@ model Tender {
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
 
-  project Project?
+  project  Project?
+  prospect Prospect?
 
   storedFiles        StoredFile[]
   linkedDocuments    LinkedDocument[]
@@ -471,6 +473,31 @@ model Tender {
   @@index([organisationId, clientId])
   @@index([organisationId, due])
   @@index([organisationId, outcome])
+}
+
+// ─── Prospects / CRM (Phase 13) ──────────────────────────────────────────────
+// Lightweight pre-tender leads list (cold → warm). Converting creates (or
+// reuses) a Client + ClientContact and a Tender, carrying the prospect's
+// details over — enter once, same pattern as Tender → Project conversion.
+model Prospect {
+  id                String       @id @default(cuid())
+  organisationId    String
+  organisation      Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  name              String
+  contactName       String?
+  contactEmail      String?
+  contactPhone      String?
+  address           String?
+  estimatedValue    Float?
+  stage             String       @default("Cold")
+  notes             String?
+  convertedTenderId String?      @unique
+  convertedTender   Tender?      @relation(fields: [convertedTenderId], references: [id])
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([organisationId])
+  @@index([organisationId, stage])
 }
 
 // ─── Projects & Construction Program ─────────────────────────────────────────

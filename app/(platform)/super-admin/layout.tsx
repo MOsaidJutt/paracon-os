@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
+import { isSuperAdminFeatureEnabled } from "@/lib/flags";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { UserMenu } from "@/components/shell/user-menu";
 
@@ -15,6 +16,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   const session = await auth();
   if (!session?.user) redirect("/login");
   if (!session.user.permissions.includes("platform.superadmin")) redirect("/dashboard");
+  if (!isSuperAdminFeatureEnabled()) redirect("/dashboard");
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

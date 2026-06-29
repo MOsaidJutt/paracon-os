@@ -5,6 +5,8 @@ import { PERMISSION_GROUPS } from "./permissions";
 // create the same permissions/roles/modules instead of two copies drifting.
 
 export const PERMISSION_LABELS: Record<string, string> = {
+  "prospect.view": "View prospects",
+  "prospect.edit": "Edit prospects & convert to tender",
   "tender.view": "View tenders",
   "tender.edit": "Edit tenders",
   "project.view": "View projects",
@@ -45,6 +47,7 @@ export const ROLE_DEFINITIONS = [
     name: "Director",
     permissions: [
       ...PERMISSION_GROUPS.admin,
+      ...PERMISSION_GROUPS.prospect,
       ...PERMISSION_GROUPS.tender,
       ...PERMISSION_GROUPS.project,
       ...PERMISSION_GROUPS.program,
@@ -92,6 +95,8 @@ export const ROLE_DEFINITIONS = [
     slug: "estimator",
     name: "Estimator",
     permissions: [
+      "prospect.view",
+      "prospect.edit",
       "tender.view",
       "tender.edit",
       "ai.assistant.use",
@@ -106,6 +111,7 @@ export const ROLE_DEFINITIONS = [
     slug: "viewer",
     name: "Viewer",
     permissions: [
+      "prospect.view",
       "project.view",
       "tender.view",
       "forecast.view",
@@ -128,6 +134,14 @@ export const MODULES = [
 ] as const;
 
 export const CONFIG_DEFAULTS = [
+  {
+    key: "prospect.stageList",
+    group: "prospect",
+    type: "LIST" as const,
+    label: "Prospect stages",
+    description: "Stage options available on a prospect, cold to warm.",
+    valueJson: ["Cold", "Warm"],
+  },
   {
     key: "tender.statusList",
     group: "tender",

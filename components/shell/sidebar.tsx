@@ -1,7 +1,13 @@
 import Image from "next/image";
 import { SidebarNav } from "./sidebar-nav";
 
-export function Sidebar({ permissions }: { permissions: string[] }) {
+export function Sidebar({
+  permissions,
+  superAdminEnabled,
+}: {
+  permissions: string[];
+  superAdminEnabled: boolean;
+}) {
   return (
     <aside className="hidden w-64 flex-col bg-ink lg:flex">
       <div className="flex h-16 items-center px-5">
@@ -14,7 +20,7 @@ export function Sidebar({ permissions }: { permissions: string[] }) {
           priority
         />
       </div>
-      <SidebarNav permissions={permissions} />
+      <SidebarNav permissions={permissions} superAdminEnabled={superAdminEnabled} />
       <div className="px-5 py-4 text-xs leading-relaxed text-paper/55">
         One Team. One Standard. One Process. One Source of Truth.
       </div>

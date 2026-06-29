@@ -11,7 +11,7 @@ test("director can build a project's program with a critical date and weekly lab
   await page.waitForURL("/dashboard");
 
   // A project needs an existing client to bill against.
-  await page.goto("/tenders/clients");
+  await page.goto("/contacts/clients");
   await page.getByRole("button", { name: "Add client" }).click();
   await page.getByLabel("Name").fill("E2E Program Client");
   await page.getByLabel("Status").click();

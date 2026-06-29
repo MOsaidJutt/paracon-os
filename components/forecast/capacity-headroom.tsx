@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { roundHeadroom, roundShortfall } from "@/lib/forecast/format";
@@ -61,6 +62,10 @@ export function CapacityHeadroomCard({ headroom }: { headroom: CapacityHeadroom 
             </ul>
           </div>
         )}
+
+        <Link href="/forecast" className="self-start text-sm font-medium text-brass hover:underline">
+          More details →
+        </Link>
       </CardContent>
     </Card>
   );

@@ -4,8 +4,7 @@ import { AdminTabs } from "@/components/admin/admin-tabs";
 
 const TABS = [
   { href: "/tenders", label: "Register", permission: "tender.view" },
-  { href: "/tenders/clients", label: "Clients", permission: "tender.view" },
-  { href: "/tenders/suppliers", label: "Suppliers", permission: "tender.view" },
+  { href: "/tenders/templates", label: "Template", permission: "doc.edit" },
   { href: "/tenders/import", label: "Import / Export", permission: "tender.edit" },
 ];
 

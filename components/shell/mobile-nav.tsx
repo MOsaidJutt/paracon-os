@@ -7,7 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { SidebarNav } from "./sidebar-nav";
 
-export function MobileNav({ permissions }: { permissions: string[] }) {
+export function MobileNav({
+  permissions,
+  superAdminEnabled,
+}: {
+  permissions: string[];
+  superAdminEnabled: boolean;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -33,7 +39,7 @@ export function MobileNav({ permissions }: { permissions: string[] }) {
           />
         </div>
         <div onClick={() => setOpen(false)}>
-          <SidebarNav permissions={permissions} />
+          <SidebarNav permissions={permissions} superAdminEnabled={superAdminEnabled} />
         </div>
       </SheetContent>
     </Sheet>

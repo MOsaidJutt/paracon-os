@@ -1,6 +1,10 @@
+import { redirect } from "next/navigation";
+import { isAiFeatureEnabled } from "@/lib/flags";
 import { AiUsageTable } from "@/components/admin/ai-settings/ai-usage-table";
 
 export default function AdminAiUsagePage() {
+  if (!isAiFeatureEnabled()) redirect("/admin/users");
+
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">

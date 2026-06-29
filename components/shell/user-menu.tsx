@@ -13,6 +13,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+// Set only when demoing through a tunnel (ngrok etc.) where the dev server
+// can't see the public host — see NEXT_PUBLIC_APP_URL in .env.example.
+const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
+
 function initials(name: string) {
   return name
     .split(" ")
@@ -56,7 +60,7 @@ export function UserMenu({
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/login" })}>
+        <DropdownMenuItem onClick={() => signOut({ callbackUrl: appBaseUrl ? `${appBaseUrl}/login` : "/login" })}>
           <LogOut className="mr-2 size-4" />
           Sign out
         </DropdownMenuItem>

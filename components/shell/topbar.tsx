@@ -9,6 +9,7 @@ export function Topbar({
   orgName,
   logoUrl,
   permissions,
+  superAdminEnabled,
   userName,
   userEmail,
   role,
@@ -16,6 +17,7 @@ export function Topbar({
   orgName: string;
   logoUrl: string | null;
   permissions: string[];
+  superAdminEnabled: boolean;
   userName: string;
   userEmail: string;
   role: string;
@@ -23,7 +25,7 @@ export function Topbar({
   return (
     <header className="flex h-16 items-center justify-between border-b border-border bg-background px-4 lg:px-6">
       <div className="flex items-center gap-2">
-        <MobileNav permissions={permissions} />
+        <MobileNav permissions={permissions} superAdminEnabled={superAdminEnabled} />
         <OrgLogo logoUrl={logoUrl} orgName={orgName} />
       </div>
       <div className="flex items-center gap-3">

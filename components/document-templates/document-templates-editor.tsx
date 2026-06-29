@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { Download, Plus, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,8 @@ type TemplateConfig =
   | { pdfColors: PdfColors; scopeLibrary: ScopeLibraryItem[]; qualificationsLibrary: string[] }
   | { pdfColors: PdfColors };
 
-type TemplateEntry = { type: "TENDER_LETTER" | "VARIATION" | "PROGRESS_CLAIM"; configJson: TemplateConfig; isCustomised: boolean };
+export type DocumentTemplateType = "TENDER_LETTER" | "VARIATION" | "PROGRESS_CLAIM";
+type TemplateEntry = { type: DocumentTemplateType; configJson: TemplateConfig; isCustomised: boolean };
 
 const TYPE_LABEL: Record<TemplateEntry["type"], string> = {
   TENDER_LETTER: "Tender Letter",
@@ -174,8 +175,33 @@ function TenderLetterEditor({
 function TemplateCard({ entry }: { entry: TemplateEntry }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<TemplateConfig>(entry.configJson);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => setDraft(entry.configJson), [entry.configJson]);
+
+  function handleDownload() {
+    const blob = new Blob([JSON.stringify(draft, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${entry.type.toLowerCase()}-template.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    try {
+      const parsed = JSON.parse(await file.text());
+      setDraft(parsed);
+      toast.info("Template loaded — review and click Save to apply it.");
+    } catch {
+      toast.error("That file isn't valid JSON.");
+    }
+  }
 
   const save = useMutation({
     mutationFn: async (configJson: TemplateConfig) => {
@@ -198,11 +224,24 @@ function TemplateCard({ entry }: { entry: TemplateEntry }) {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{TYPE_LABEL[entry.type]}</CardTitle>
-        <CardDescription>
-          {entry.isCustomised ? "Customised for your organisation." : "Using the built-in default — save to customise."}
-        </CardDescription>
+      <CardHeader className="flex flex-row items-start justify-between gap-4">
+        <div>
+          <CardTitle className="text-base">{TYPE_LABEL[entry.type]}</CardTitle>
+          <CardDescription>
+            {entry.isCustomised ? "Customised for your organisation." : "Using the built-in default — save to customise."}
+          </CardDescription>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <input ref={fileInputRef} type="file" accept="application/json,.json" className="hidden" onChange={handleUpload} />
+          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+            <Upload className="size-4" />
+            Upload
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleDownload}>
+            <Download className="size-4" />
+            Download
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {entry.type === "TENDER_LETTER" ? (
@@ -226,7 +265,8 @@ function TemplateCard({ entry }: { entry: TemplateEntry }) {
   );
 }
 
-export function DocumentTemplatesEditor() {
+/** Renders only the requested template types — lets each module (Tenders, Projects) show just the templates it owns. */
+export function DocumentTemplatesEditor({ types }: { types: DocumentTemplateType[] }) {
   const { data, isLoading } = useQuery({
     queryKey: ["admin", "document-templates"],
     queryFn: async () => {
@@ -240,9 +280,11 @@ export function DocumentTemplatesEditor() {
 
   return (
     <div className="flex flex-col gap-4">
-      {data?.templates.map((entry) => (
-        <TemplateCard key={entry.type} entry={entry} />
-      ))}
+      {data?.templates
+        .filter((entry) => types.includes(entry.type))
+        .map((entry) => (
+          <TemplateCard key={entry.type} entry={entry} />
+        ))}
     </div>
   );
 }

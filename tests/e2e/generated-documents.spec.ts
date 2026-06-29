@@ -11,7 +11,7 @@ test.describe("Generated documents — Variation & Progress Claim", () => {
   }) => {
     test.setTimeout(90_000); // PDF + Excel rendering on the server per generate/regenerate call, twice
 
-    // createE2EProject needs /tenders/clients to create the throwaway client first —
+    // createE2EProject needs /contacts/clients to create the throwaway client first —
     // project-manager doesn't have tender.view, so this uses director (matches
     // documents.spec.ts's convention for the same reason).
     await page.goto("/login");
