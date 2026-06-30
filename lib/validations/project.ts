@@ -58,6 +58,8 @@ export const listProjectsQuerySchema = z.object({
   search: z.string().optional(),
   sortBy: z.enum(["name", "value", "startDate", "endDate", "status", "createdAt"]).default("startDate"),
   sortDir: z.enum(["asc", "desc"]).default("asc"),
+  // Resource Planner uses this to exclude projects with no labour requirements.
+  hasLabour: z.coerce.boolean().optional(),
 });
 
 // isCritical is intentionally absent here — it's server-computed only by

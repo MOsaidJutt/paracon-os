@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/rbac";
 import { getTenantContext } from "@/lib/tenant";
 import { toErrorResponse } from "@/lib/api-error";
 import { approveSupplierBill } from "@/lib/finance/bill-review-service";
+import { sendEventWithData } from "@/lib/inngest/send-safe";
 
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -10,6 +11,13 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     const db = getTenantContext(session.user.organisationId);
 
     const bill = await approveSupplierBill(db, session.user.organisationId, session.user.id, params.id);
+
+    await sendEventWithData("finance/bill.approved", {
+      organisationId: session.user.organisationId,
+      billId: bill.id,
+      projectId: bill.projectId ?? null,
+    });
+
     return NextResponse.json({ bill });
   } catch (error) {
     return toErrorResponse(error);

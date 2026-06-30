@@ -375,6 +375,52 @@ type DemoTender = {
   intent: string;
 };
 
+// CRM — a handful of realistic Paracon-style leads at different stages so the
+// Prospects page is never empty on first load. Convert-to-tender converts one
+// of these in the demo to demonstrate the carry-over flow.
+const DEMO_PROSPECTS: { name: string; contactName: string; contactEmail: string; contactPhone: string; address: string; estimatedValue: number; stage: string; notes: string }[] = [
+  {
+    name: "Moonee Ponds Medical Centre Fitout",
+    contactName: "Sandra Chu",
+    contactEmail: "s.chu@mpmedical.example.com",
+    contactPhone: "0411 900 101",
+    address: "88 Hall Street, Moonee Ponds VIC 3039",
+    estimatedValue: 280_000,
+    stage: "Cold",
+    notes: "Referred by Meridian Funds. Site inspection booked for next month.",
+  },
+  {
+    name: "Footscray Commercial Tower Levels 4–6",
+    contactName: "James Riordan",
+    contactEmail: "j.riordan@footscrayprop.example.com",
+    contactPhone: "0411 900 102",
+    address: "22 Paisley Street, Footscray VIC 3011",
+    estimatedValue: 620_000,
+    stage: "Warm",
+    notes: "Scope meeting completed. Awaiting updated drawings from architect.",
+  },
+  {
+    name: "St Kilda Road Lobby & Reception Upgrade",
+    contactName: "Olivia Pham",
+    contactEmail: "o.pham@stkildapm.example.com",
+    contactPhone: "0411 900 103",
+    address: "333 St Kilda Road, Melbourne VIC 3004",
+    estimatedValue: 1_100_000,
+    stage: "Warm",
+    notes: "High priority — repeat client. Budget confirmed. Target start Q3.",
+  },
+  {
+    name: "Docklands Residential Foyer Refresh",
+    contactName: "Michael Tang",
+    contactEmail: "m.tang@docklandsliving.example.com",
+    contactPhone: "0411 900 104",
+    address: "7 Waterfront Place, Docklands VIC 3008",
+    estimatedValue: 160_000,
+    stage: "Cold",
+    notes: "Enquiry via website. Follow up call scheduled.",
+  },
+];
+
 const DEMO_TENDERS: DemoTender[] = [
   {
     projectName: "Yarra Quarter Stage 2 Fitout",
@@ -738,6 +784,30 @@ async function main() {
     for (const weekStartMs of weekStarts) {
       await prisma.allocation.create({
         data: { organisationId: org.id, workerId, projectId, weekStart: new Date(weekStartMs) },
+      });
+    }
+  }
+
+  // Prospects / CRM demo data — a realistic lead pipeline so the Prospects
+  // page is never empty on first load.
+  console.log("Seeding Prospects demo data...");
+  for (const p of DEMO_PROSPECTS) {
+    const existing = await prisma.prospect.findFirst({
+      where: { organisationId: org.id, name: p.name },
+    });
+    if (!existing) {
+      await prisma.prospect.create({
+        data: {
+          organisationId: org.id,
+          name: p.name,
+          contactName: p.contactName,
+          contactEmail: p.contactEmail,
+          contactPhone: p.contactPhone,
+          address: p.address,
+          estimatedValue: p.estimatedValue,
+          stage: p.stage,
+          notes: p.notes,
+        },
       });
     }
   }

@@ -9,7 +9,7 @@ import { computeMove, toDownstreamImpacted } from "@/lib/schedule/recalc";
 import { assertInList, loadScheduleConfig } from "@/lib/schedule/config";
 import { recomputeCriticalPath } from "@/lib/schedule/recompute";
 import { syncProjectMilestones } from "@/lib/projects/sync";
-import { sendEvent } from "@/lib/inngest/send-safe";
+import { sendEvent, sendEventWithData } from "@/lib/inngest/send-safe";
 import type { DependencyType } from "@/lib/schedule/graph";
 
 /**
@@ -110,6 +110,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
       after: { startDate: body.startDate, endDate: body.endDate, reason: body.reason ?? null },
     });
     await sendEvent("forecast/recompute.requested");
+    await sendEventWithData("schedule/activity.moved", {
+      organisationId: session.user.organisationId,
+      projectId: params.id,
+      activityId: params.activityId,
+    });
 
     return NextResponse.json({ changes });
   } catch (error) {

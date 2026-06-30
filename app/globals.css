@@ -106,3 +106,14 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ── gantt-task-react overrides ─────────────────────────────────────────────
+   Force task-list cells to clip with ellipsis so long names degrade
+   gracefully at any column width. Class names confirmed from the library's
+   dist/index.css (gantt-task-react v0.3.9).                               */
+._WuQ0f,
+._3lLk3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

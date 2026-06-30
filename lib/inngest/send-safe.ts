@@ -14,3 +14,15 @@ export async function sendEvent(name: string): Promise<void> {
     console.warn(`[inngest] failed to send "${name}":`, error instanceof Error ? error.message : error);
   }
 }
+
+/** Fire-and-forget with a typed data payload. Same resilience guarantee as sendEvent. */
+export async function sendEventWithData<T extends Record<string, unknown>>(
+  name: string,
+  data: T
+): Promise<void> {
+  try {
+    await inngest.send({ name, data });
+  } catch (error) {
+    console.warn(`[inngest] failed to send "${name}":`, error instanceof Error ? error.message : error);
+  }
+}

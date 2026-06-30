@@ -6,7 +6,8 @@ import { toErrorResponse } from "@/lib/api-error";
 import { NotFoundError } from "@/lib/errors";
 import { updateTenderSchema } from "@/lib/validations/tender";
 import { assertInList, deriveTenderComputedFields, loadTenderConfig } from "@/lib/tenders/config";
-import { sendEvent } from "@/lib/inngest/send-safe";
+import { sendEvent, sendEventWithData } from "@/lib/inngest/send-safe";
+import { getConfig } from "@/lib/config";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -107,6 +108,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       after: { status: tender.status, value: tender.value },
     });
     await sendEvent("forecast/recompute.requested");
+
+    // Fire automation: project auto-create when outcome transitions into an awarded value.
+    if (body.outcome && body.outcome !== existing.outcome) {
+      const awardedOutcomes = await getConfig<string[]>(
+        "automation.tenderAwardedOutcomes",
+        session.user.organisationId
+      ).catch(() => ["Won"]);
+      if (awardedOutcomes.includes(body.outcome)) {
+        await sendEventWithData("tender/awarded", {
+          tenderId: tender.id,
+          organisationId: session.user.organisationId,
+        });
+      }
+    }
 
     return NextResponse.json({ tender });
   } catch (error) {

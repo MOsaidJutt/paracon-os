@@ -39,7 +39,7 @@ export function ResourcePlanner() {
   } = useQuery({
     queryKey: ["allocations", "project-options"],
     queryFn: async () => {
-      const res = await fetch("/api/projects");
+      const res = await fetch("/api/projects?sortBy=name&sortDir=asc&hasLabour=true");
       if (!res.ok) throw new Error("Failed to load projects");
       return (await res.json()) as { projects: ProjectOption[] };
     },

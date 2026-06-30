@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
       search: params.get("search") ?? undefined,
       sortBy: params.get("sortBy") ?? undefined,
       sortDir: params.get("sortDir") ?? undefined,
+      hasLabour: params.get("hasLabour") ?? undefined,
     });
 
     const projects = await db.project.findMany({
@@ -25,6 +26,12 @@ export async function GET(req: NextRequest) {
         status: query.status ? { in: query.status } : undefined,
         clientId: query.clientId,
         name: query.search ? { contains: query.search } : undefined,
+        // Only include projects that have at least one activity with labour
+        // requirements set — used by the Resource Planner dropdown so test
+        // projects with empty activities don't appear as the default.
+        ...(query.hasLabour
+          ? { activities: { some: { NOT: { labourRequired: { equals: {} } } } } }
+          : {}),
       },
       orderBy: { [query.sortBy]: query.sortDir },
       include: {

@@ -1,3 +1,4 @@
+import { unstable_cache, revalidateTag } from "next/cache";
 import { prisma } from "./prisma";
 import { BadRequestError } from "./errors";
 
@@ -11,19 +12,58 @@ export type ConfigEntry = {
   isOverridden: boolean;
 };
 
+// Cache tag helpers — stable, unique per (org, key) or per platform key.
+const cfgTag = (organisationId: string, key: string) => `cfg:${organisationId}:${key}`;
+const platformCfgTag = (key: string) => `cfg:platform:${key}`;
+
 /**
- * Resolves a single Config value: org-specific override if one exists,
- * else the platform default (organisationId: null) row. Mirrors
- * lib/ai.ts's resolveAiSetting FEATURE -> ORG -> GLOBAL resolution.
+ * Resolves a single Config value with a 60-second server-side cache.
+ * Cache is busted immediately when setOrgConfig / resetOrgConfig /
+ * setPlatformConfig writes to the same key.
+ *
+ * Resolution order: org-specific override → platform default → throw.
  */
-export async function getConfig<T = unknown>(key: string, organisationId: string): Promise<T> {
-  const override = await prisma.config.findUnique({ where: { organisationId_key: { organisationId, key } } });
+async function fetchConfigDirect<T>(key: string, organisationId: string): Promise<T> {
+  const override = await prisma.config.findUnique({
+    where: { organisationId_key: { organisationId, key } },
+  });
   if (override) return override.valueJson as T;
 
-  const platformDefault = await prisma.config.findFirst({ where: { organisationId: null, key } });
+  const platformDefault = await prisma.config.findFirst({
+    where: { organisationId: null, key },
+  });
   if (!platformDefault) throw new Error(`No Config row found for key "${key}"`);
 
   return platformDefault.valueJson as T;
+}
+
+/**
+ * Resolves a single Config value with a 60-second server-side cache.
+ * Cache is busted immediately when setOrgConfig / resetOrgConfig /
+ * setPlatformConfig writes to the same key.
+ *
+ * Falls back to a direct DB call when running outside a Next.js request
+ * context (seed scripts, tests, CLI tools) where unstable_cache is unavailable.
+ */
+export async function getConfig<T = unknown>(key: string, organisationId: string): Promise<T> {
+  try {
+    return await unstable_cache(
+      () => fetchConfigDirect<T>(key, organisationId),
+      [cfgTag(organisationId, key)],
+      {
+        revalidate: 60,
+        tags: [cfgTag(organisationId, key), platformCfgTag(key)],
+      }
+    )();
+  } catch (err) {
+    // unstable_cache requires the Next.js incrementalCache context (a live
+    // request). Seed scripts, tests and CLI tools run outside that context —
+    // fall back to a direct DB call so those environments work normally.
+    if (err instanceof Error && err.message.includes("incrementalCache")) {
+      return fetchConfigDirect<T>(key, organisationId);
+    }
+    throw err;
+  }
 }
 
 /** Shared by every feature's Config-backed validation: asserts a free-text value is one of the allowed options. */
@@ -96,10 +136,14 @@ export async function setOrgConfig(
       updatedBy,
     },
   });
+
+  // Bust cache immediately — config changes take effect on the next request.
+  revalidateTag(cfgTag(organisationId, key));
 }
 
 export async function resetOrgConfig(organisationId: string, key: string): Promise<void> {
   await prisma.config.deleteMany({ where: { organisationId, key } });
+  revalidateTag(cfgTag(organisationId, key));
 }
 
 export async function setPlatformConfig(key: string, valueJson: unknown, updatedBy: string): Promise<void> {
@@ -110,4 +154,8 @@ export async function setPlatformConfig(key: string, valueJson: unknown, updated
     where: { id: platformDefault.id },
     data: { valueJson: valueJson as object, updatedBy },
   });
+
+  // Bust all orgs' caches for this key — platform default affects every org
+  // that doesn't have its own override.
+  revalidateTag(platformCfgTag(key));
 }

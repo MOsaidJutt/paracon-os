@@ -5,6 +5,7 @@ import { auditLog } from "@/lib/audit";
 import { toErrorResponse } from "@/lib/api-error";
 import { dailyUpdateSubmitSchema } from "@/lib/validations/site-update";
 import { submitDailyUpdate } from "@/lib/site/daily-update-service";
+import { sendEventWithData } from "@/lib/inngest/send-safe";
 
 /** The single-confirm submit — idempotent per (project, foreman, date), so the offline sync queue can safely retry it. */
 export async function POST(req: NextRequest) {
@@ -28,6 +29,13 @@ export async function POST(req: NextRequest) {
         taskProgressCount: body.taskProgress.length,
         deliveryConfirmationCount: body.deliveryConfirmations.length,
       },
+    });
+
+    await sendEventWithData("site/daily-update.submitted", {
+      organisationId: session.user.organisationId,
+      projectId: body.projectId,
+      dailySiteUpdateId: dailyUpdate.id,
+      date: body.date instanceof Date ? body.date.toISOString() : String(body.date),
     });
 
     return NextResponse.json({ dailyUpdate });
