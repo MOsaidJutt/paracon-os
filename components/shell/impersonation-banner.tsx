@@ -22,9 +22,9 @@ export function ImpersonationBanner({ name }: { name: string }) {
   }
 
   return (
-    <div className="flex items-center justify-between bg-amber-500/90 px-4 py-2 text-sm font-medium text-amber-950">
+    <div className="flex items-center justify-between bg-rag-amber px-4 py-2 text-sm font-medium text-ink">
       <span>Impersonating {name} — actions are audited.</span>
-      <Button size="sm" variant="outline" className="h-7 border-amber-950/30 bg-transparent text-amber-950 hover:bg-amber-950/10" disabled={loading} onClick={exit}>
+      <Button size="sm" variant="outline" className="h-7 border-ink/30 bg-transparent text-ink hover:bg-ink/10" disabled={loading} onClick={exit}>
         {loading ? "Exiting..." : "Exit impersonation"}
       </Button>
     </div>

@@ -19,6 +19,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
+import { AuditTrail } from "@/components/audit/audit-trail";
 import type { SupplierConfig } from "@/lib/suppliers/config";
 
 export type SupplierRow = {
@@ -102,6 +104,7 @@ export function SupplierFormDialog({
     onSuccess: () => {
       toast.success(isEdit ? "Supplier updated" : "Supplier created");
       queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+      if (isEdit) queryClient.invalidateQueries({ queryKey: ["audit-trail", "Supplier", supplier!.id] });
       onOpenChange(false);
     },
     onError: (error: Error) => toast.error(error.message),
@@ -220,6 +223,13 @@ export function SupplierFormDialog({
                 </FormItem>
               )}
             />
+
+            {isEdit && (
+              <>
+                <Separator />
+                <AuditTrail entityType="Supplier" entityId={supplier!.id} />
+              </>
+            )}
 
             <DialogFooter>
               <Button type="submit" disabled={mutation.isPending}>

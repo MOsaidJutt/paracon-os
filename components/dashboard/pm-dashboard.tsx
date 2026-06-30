@@ -3,13 +3,28 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { Settings2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { QueryErrorState } from "@/components/shared/query-error-state";
 import { ProjectHealthBadge } from "@/components/dashboard/project-health-badge";
 import { AlertsPanel } from "@/components/dashboard/alerts-panel";
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
+import { SortableWidget } from "@/components/dashboard/sortable-widget";
+import { useDashboardLayout } from "@/components/dashboard/use-dashboard-layout";
+import { DASHBOARD_WIDGETS } from "@/lib/dashboard/widget-registry";
 import { StaffScorecardPanel } from "@/components/scorecard/staff-scorecard-panel";
 import { formatDate } from "@/lib/tenders/format";
 import type { Alert } from "@/lib/dashboard/alerts";
@@ -45,6 +60,9 @@ type PmDashboardResponse = {
   alerts: Alert[];
 };
 
+const TITLE_BY_ID = Object.fromEntries(DASHBOARD_WIDGETS.pm.map((w) => [w.id, w.title]));
+const FULL_WIDTH_IDS = new Set(["my-projects", "scorecard"]);
+
 function DashboardSkeleton() {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -68,6 +86,12 @@ function aggregateLabourByTrade(rows: LabourWeekRow[]): { trade: string; demand:
 
 export function PmDashboard({ canAssessScorecard }: { canAssessScorecard: boolean }) {
   const [projectId, setProjectId] = useState<string | undefined>(undefined);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+  const { layout, isLoading: layoutLoading, editing, setDraft, startEditing, finishEditing, isSaving } =
+    useDashboardLayout("pm");
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ["dashboard", "pm", projectId],
@@ -95,31 +119,27 @@ export function PmDashboard({ canAssessScorecard }: { canAssessScorecard: boolea
   const projectOptions = projectId === undefined ? data?.projects ?? [] : allProjects?.projects ?? [];
   const chartData = data ? aggregateLabourByTrade(data.labour) : [];
 
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <DashboardFilters projects={projectOptions} projectId={projectId} onProjectChange={setProjectId} />
-      </div>
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const oldIndex = prev.findIndex((w) => w.id === active.id);
+      const newIndex = prev.findIndex((w) => w.id === over.id);
+      return arrayMove(prev, oldIndex, newIndex);
+    });
+  }
 
-      {isLoading ? (
-        <DashboardSkeleton />
-      ) : isError || !data ? (
-        <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-border p-6">
-          <p className="text-sm text-destructive">Failed to load the dashboard.</p>
-          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}>
-            {isRefetching ? "Retrying..." : "Retry"}
-          </Button>
-        </div>
-      ) : data.projects.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No projects assigned to you yet.</p>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="lg:col-span-2">
+  function renderWidget(id: string, d: PmDashboardResponse) {
+    switch (id) {
+      case "my-projects":
+        return (
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">My projects</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
-              {data.projects.map((p) => (
+              {d.projects.map((p) => (
                 <Badge key={p.id} variant="outline" className="gap-1.5">
                   {p.name}
                   <ProjectHealthBadge status={p.status} />
@@ -127,18 +147,20 @@ export function PmDashboard({ canAssessScorecard }: { canAssessScorecard: boolea
               ))}
             </CardContent>
           </Card>
-
+        );
+      case "lookahead":
+        return (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">3-week look-ahead</CardTitle>
               <CardDescription>Upcoming activities across your projects.</CardDescription>
             </CardHeader>
             <CardContent>
-              {data.lookahead.length === 0 ? (
+              {d.lookahead.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No activities in the next 3 weeks.</p>
               ) : (
                 <ul className="flex flex-col gap-1.5">
-                  {data.lookahead.map((a) => (
+                  {d.lookahead.map((a) => (
                     <li key={a.id} className="flex items-center justify-between text-sm">
                       <span className="text-foreground">
                         {a.projectName} — {a.name} <span className="text-muted-foreground">({a.trade})</span>
@@ -150,7 +172,9 @@ export function PmDashboard({ canAssessScorecard }: { canAssessScorecard: boolea
               )}
             </CardContent>
           </Card>
-
+        );
+      case "labour-chart":
+        return (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Labour required vs allocated</CardTitle>
@@ -175,36 +199,40 @@ export function PmDashboard({ canAssessScorecard }: { canAssessScorecard: boolea
               )}
             </CardContent>
           </Card>
-
+        );
+      case "deliveries":
+        return (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Delivery status</CardTitle>
             </CardHeader>
             <CardContent>
-              {data.deliveries.length === 0 ? (
+              {d.deliveries.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No deliveries tracked yet.</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
-                  {data.deliveries.map((d) => (
-                    <Badge key={d.status} variant="outline">
-                      {d.status}: {d.count}
+                  {d.deliveries.map((delivery) => (
+                    <Badge key={delivery.status} variant="outline">
+                      {delivery.status}: {delivery.count}
                     </Badge>
                   ))}
                 </div>
               )}
             </CardContent>
           </Card>
-
+        );
+      case "open-issues":
+        return (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Open issues</CardTitle>
             </CardHeader>
             <CardContent>
-              {data.openIssues.length === 0 ? (
+              {d.openIssues.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No open issues.</p>
               ) : (
                 <ul className="flex flex-col gap-2">
-                  {data.openIssues.map((issue) => (
+                  {d.openIssues.map((issue) => (
                     <li key={issue.id} className="flex items-center justify-between text-sm">
                       <span className="text-foreground">
                         {issue.projectName} — {issue.description}
@@ -216,12 +244,61 @@ export function PmDashboard({ canAssessScorecard }: { canAssessScorecard: boolea
               )}
             </CardContent>
           </Card>
+        );
+      case "alerts":
+        return <AlertsPanel alerts={d.alerts} />;
+      case "scorecard":
+        return <StaffScorecardPanel canAssess={canAssessScorecard} />;
+      default:
+        return null;
+    }
+  }
 
-          <AlertsPanel alerts={data.alerts} />
-        </div>
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between gap-3">
+        <DashboardFilters projects={projectOptions} projectId={projectId} onProjectChange={setProjectId} />
+        {!isLoading && data && data.projects.length > 0 && (
+          <Button variant="outline" size="sm" onClick={editing ? finishEditing : startEditing} disabled={isSaving}>
+            <Settings2 className="size-4" />
+            {editing ? (isSaving ? "Saving..." : "Done") : "Customize"}
+          </Button>
+        )}
+      </div>
+
+      {isLoading || layoutLoading ? (
+        <DashboardSkeleton />
+      ) : isError || !data ? (
+        <QueryErrorState message="Failed to load the dashboard." onRetry={() => refetch()} isRetrying={isRefetching} />
+      ) : data.projects.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No projects assigned to you yet.</p>
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={layout.map((w) => w.id)} strategy={rectSortingStrategy}>
+            <div className="grid gap-4 lg:grid-cols-2">
+              {layout.map((w) => (
+                <SortableWidget
+                  key={w.id}
+                  id={w.id}
+                  editing={editing}
+                  visible={w.visible}
+                  onToggleVisible={() =>
+                    setDraft((prev) =>
+                      prev ? prev.map((x) => (x.id === w.id ? { ...x, visible: !x.visible } : x)) : prev
+                    )
+                  }
+                  className={FULL_WIDTH_IDS.has(w.id) ? "lg:col-span-2" : undefined}
+                >
+                  {editing && (
+                    <p className="px-3 pt-2 text-xs font-medium text-muted-foreground">{TITLE_BY_ID[w.id] ?? w.id}</p>
+                  )}
+                  {renderWidget(w.id, data)}
+                </SortableWidget>
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
-
-      <StaffScorecardPanel canAssess={canAssessScorecard} />
     </div>
   );
 }

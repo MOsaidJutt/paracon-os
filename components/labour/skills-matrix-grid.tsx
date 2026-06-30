@@ -38,7 +38,7 @@ function SkillLevelDots({ level }: { level: number | undefined }) {
       {Array.from({ length: 5 }, (_, i) => (
         <span
           key={i}
-          className={`size-1.5 rounded-full ${i < level ? "bg-[#B08D57]" : "bg-muted"}`}
+          className={`size-1.5 rounded-full ${i < level ? "bg-brass" : "bg-muted"}`}
         />
       ))}
     </div>

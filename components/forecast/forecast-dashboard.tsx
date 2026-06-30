@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { QueryErrorState } from "@/components/shared/query-error-state";
 import { ForecastMatrix } from "@/components/forecast/forecast-matrix";
 import { ForecastHeatmap } from "@/components/forecast/forecast-heatmap";
 import { CapacityHeadroomCard } from "@/components/forecast/capacity-headroom";
@@ -32,14 +32,7 @@ export function ForecastDashboard() {
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading forecast...</p>;
   if (isError || !data) {
-    return (
-      <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-border p-6">
-        <p className="text-sm text-destructive">Failed to load the forecast.</p>
-        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}>
-          {isRefetching ? "Retrying..." : "Retry"}
-        </Button>
-      </div>
-    );
+    return <QueryErrorState message="Failed to load the forecast." onRetry={() => refetch()} isRetrying={isRefetching} />;
   }
 
   return (

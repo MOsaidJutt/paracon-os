@@ -13,9 +13,9 @@ import {
 } from "@dnd-kit/core";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { QueryErrorState } from "@/components/shared/query-error-state";
 import type { LabourConfig } from "@/lib/labour/config";
 import { AllocationGrid } from "./allocation-grid";
 import { WorkerPool, type PoolWorker } from "./worker-pool";
@@ -81,14 +81,7 @@ export function ResourcePlanner() {
 
   if (projectsLoading) return <p className="text-sm text-muted-foreground">Loading projects...</p>;
   if (projectsErrored) {
-    return (
-      <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-border p-6">
-        <p className="text-sm text-destructive">Failed to load projects.</p>
-        <Button variant="outline" size="sm" onClick={() => refetchProjects()}>
-          Retry
-        </Button>
-      </div>
-    );
+    return <QueryErrorState message="Failed to load projects." onRetry={() => refetchProjects()} />;
   }
   if (!activeProjectId || !activeProject) {
     return (

@@ -20,6 +20,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { AuditTrail } from "@/components/audit/audit-trail";
 import type { TenderConfig } from "@/lib/tenders/config";
 
 export type ClientRow = {
@@ -116,6 +117,7 @@ export function ClientFormDialog({
     onSuccess: () => {
       toast.success(isEdit ? "Client updated" : "Client created");
       queryClient.invalidateQueries({ queryKey: ["clients"] });
+      if (isEdit) queryClient.invalidateQueries({ queryKey: ["audit-trail", "Client", client!.id] });
       onOpenChange(false);
     },
     onError: (error: Error) => toast.error(error.message),
@@ -261,6 +263,13 @@ export function ClientFormDialog({
                 </Button>
               </div>
             ))}
+
+            {isEdit && (
+              <>
+                <Separator />
+                <AuditTrail entityType="Client" entityId={client!.id} />
+              </>
+            )}
 
             <DialogFooter>
               <Button type="submit" disabled={mutation.isPending}>

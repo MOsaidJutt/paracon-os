@@ -24,6 +24,7 @@ import { Separator } from "@/components/ui/separator";
 import { DocumentsPanel } from "@/components/documents/documents-panel";
 import { TenderDocumentActions } from "@/components/documents/generated/tender-document-actions";
 import { ClientCombobox, type ClientOption } from "@/components/contacts/client-combobox";
+import { AuditTrail } from "@/components/audit/audit-trail";
 import type { TenderConfig } from "@/lib/tenders/config";
 
 export type TenderRow = {
@@ -188,6 +189,7 @@ export function TenderFormSheet({
     onSuccess: () => {
       toast.success(isEdit ? "Tender updated" : "Tender created");
       queryClient.invalidateQueries({ queryKey: ["tenders"] });
+      if (isEdit) queryClient.invalidateQueries({ queryKey: ["audit-trail", "Tender", tender!.id] });
       onOpenChange(false);
     },
     onError: (error: Error) => toast.error(error.message),
@@ -574,6 +576,9 @@ export function TenderFormSheet({
             <Separator className="my-6" />
             <TenderDocumentActions tenderId={tender!.id} />
             <DocumentsPanel target={{ tenderId: tender!.id }} />
+            <div className="mt-6">
+              <AuditTrail entityType="Tender" entityId={tender!.id} />
+            </div>
           </>
         )}
       </SheetContent>

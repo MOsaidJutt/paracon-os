@@ -24,7 +24,7 @@ type DependencyEdge = { predecessorId: string; successorId: string };
 type BaselineTaskRow = { activityId: string; name: string; startDate: string; endDate: string };
 
 const TRADE_COLORS: Record<string, string> = {
-  Carpenter: "#B08D57",
+  Carpenter: "#6b4f43",
   Electrician: "#4F6B82",
   Plumber: "#2E7D32",
   Plasterer: "#6B5A78",

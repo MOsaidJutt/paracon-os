@@ -22,6 +22,7 @@ import { SiteUpdatesPanel } from "@/components/site/site-updates-panel";
 import { IssuesPanel } from "@/components/site/issues-panel";
 import { TaskTreeTable, DEFAULT_SCHEDULE_COLUMNS, type ScheduleColumn } from "@/components/schedule/task-tree-table";
 import { BaselinesPanel } from "@/components/schedule/baselines-panel";
+import { AuditTrail } from "@/components/audit/audit-trail";
 
 type ApiProject = ProjectRow & {
   client: { id: string; name: string };
@@ -208,6 +209,8 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
               Converted from tender &ldquo;{project.sourceTender.projectName}&rdquo;.
             </p>
           )}
+
+          <AuditTrail entityType="Project" entityId={projectId} />
         </TabsContent>
 
         <TabsContent value="program" className="flex flex-col gap-4">

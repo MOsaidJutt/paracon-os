@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { QueryErrorState } from "@/components/shared/query-error-state";
 import {
   Table,
   TableBody,
@@ -49,12 +50,7 @@ export function ProductivityTrends() {
 
   if (isError || !data) {
     return (
-      <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-border p-6">
-        <p className="text-sm text-destructive">Failed to load productivity trends.</p>
-        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}>
-          {isRefetching ? "Retrying..." : "Retry"}
-        </Button>
-      </div>
+      <QueryErrorState message="Failed to load productivity trends." onRetry={() => refetch()} isRetrying={isRefetching} />
     );
   }
 

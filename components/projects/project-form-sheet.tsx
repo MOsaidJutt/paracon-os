@@ -140,6 +140,7 @@ export function ProjectFormSheet({
     onSuccess: () => {
       toast.success(isEdit ? "Project updated" : "Project created");
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+      if (isEdit) queryClient.invalidateQueries({ queryKey: ["audit-trail", "Project", project!.id] });
       onOpenChange(false);
     },
     onError: (error: Error) => toast.error(error.message),

@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AuditDiff } from "@/components/shared/audit-diff";
 
 type AuditLogRow = {
   id: string;
@@ -128,21 +129,8 @@ export function AuditLogTable({
                 </TableRow>
                 {expandedId === log.id && (
                   <TableRow>
-                    <TableCell colSpan={colSpan} className="bg-muted/30">
-                      <div className="grid grid-cols-2 gap-4 p-2 text-xs">
-                        <div>
-                          <p className="mb-1 font-medium text-foreground">Before</p>
-                          <pre className="overflow-x-auto rounded bg-background p-2">
-                            {JSON.stringify(log.before, null, 2) ?? "—"}
-                          </pre>
-                        </div>
-                        <div>
-                          <p className="mb-1 font-medium text-foreground">After</p>
-                          <pre className="overflow-x-auto rounded bg-background p-2">
-                            {JSON.stringify(log.after, null, 2) ?? "—"}
-                          </pre>
-                        </div>
-                      </div>
+                    <TableCell colSpan={colSpan} className="bg-muted/30 p-2">
+                      <AuditDiff before={log.before} after={log.after} />
                     </TableCell>
                   </TableRow>
                 )}

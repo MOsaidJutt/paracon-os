@@ -70,6 +70,7 @@ model Organisation {
   dependencies        Dependency[]
   delayRecords        DelayRecord[]
   baselines           Baseline[]
+  dashboardLayouts    DashboardLayout[]
 }
 
 // ─── Documents & Templates engine ────────────────────────────────────────────
@@ -199,9 +200,28 @@ model User {
   staffScoresAssessed       StaffScore[]        @relation("StaffScoreAssessedBy")
   delayRecordsChanged       DelayRecord[]
   baselinesSaved            Baseline[]
+  dashboardLayouts          DashboardLayout[]
 
   @@unique([organisationId, email])
   @@index([roleId])
+}
+
+/// Per-user, per-dashboard widget order/visibility — the Xero-style "edit
+/// dashboard" preference. Config, not code: defaults live in
+/// lib/dashboard/widget-registry.ts and this table only stores a user's
+/// override once they customise.
+model DashboardLayout {
+  id             String       @id @default(cuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dashboardKey   String
+  widgets        Json
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organisationId, userId, dashboardKey])
+  @@index([organisationId])
 }
 
 model Role {

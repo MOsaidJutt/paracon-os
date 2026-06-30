@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, FolderKanban, Search, User, FileSpreadsheet } from "lucide-react";
+import { FileText, FolderKanban, Search, User, FileSpreadsheet, BookUser, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 
 type SearchResult = {
-  type: "project" | "tender" | "worker" | "document";
+  type: "project" | "tender" | "worker" | "document" | "client" | "supplier";
   id: string;
   title: string;
   subtitle: string;
@@ -22,6 +22,8 @@ const TYPE_LABEL: Record<SearchResult["type"], string> = {
   tender: "Tenders",
   worker: "Workers",
   document: "Documents",
+  client: "Clients",
+  supplier: "Suppliers",
 };
 
 const TYPE_ICON: Record<SearchResult["type"], typeof FolderKanban> = {
@@ -29,6 +31,8 @@ const TYPE_ICON: Record<SearchResult["type"], typeof FolderKanban> = {
   tender: FileSpreadsheet,
   worker: User,
   document: FileText,
+  client: BookUser,
+  supplier: Wrench,
 };
 
 export function GlobalSearch() {
@@ -84,7 +88,7 @@ export function GlobalSearch() {
       <CommandDialog open={open} onOpenChange={setOpen}>
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Search projects, tenders, workers, documents..."
+            placeholder="Search projects, tenders, contacts, documents..."
             value={query}
             onValueChange={setQuery}
           />

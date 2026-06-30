@@ -1,7 +1,16 @@
-import Link from "next/link";
+"use client";
+
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { QueryErrorState } from "@/components/shared/query-error-state";
+import { ForecastMatrix } from "@/components/forecast/forecast-matrix";
+import { ForecastHeatmap } from "@/components/forecast/forecast-heatmap";
 import { roundHeadroom, roundShortfall } from "@/lib/forecast/format";
+import type { HeatmapCell, MatrixCell } from "@/lib/forecast/engine";
 
 type RoleHeadroom = { role: string; headroom: number };
 type ShortageEntry = { role: string; blockIndex: number; blockLabel: string; gap: number };
@@ -11,6 +20,7 @@ type CapacityHeadroom = {
   canTakeOnMoreWork: boolean;
   totalHeadroom: number;
 };
+type ForecastBreakdown = { roles: string[]; matrix: MatrixCell[]; heatmap: HeatmapCell[] };
 
 function headroomLabel(headroom: number): string {
   const rounded = roundHeadroom(headroom);
@@ -20,7 +30,18 @@ function headroomLabel(headroom: number): string {
 }
 
 export function CapacityHeadroomCard({ headroom }: { headroom: CapacityHeadroom }) {
+  const [open, setOpen] = useState(false);
   const rolesWithSignal = headroom.byRole.filter((r) => roundHeadroom(r.headroom) !== 0);
+
+  const { data, isLoading, isError, refetch, isRefetching } = useQuery({
+    queryKey: ["forecast", "matrix"],
+    enabled: open,
+    queryFn: async () => {
+      const res = await fetch("/api/forecast/matrix");
+      if (!res.ok) throw new Error("Failed to load the forecast breakdown");
+      return (await res.json()) as ForecastBreakdown;
+    },
+  });
 
   return (
     <Card>
@@ -63,9 +84,30 @@ export function CapacityHeadroomCard({ headroom }: { headroom: CapacityHeadroom 
           </div>
         )}
 
-        <Link href="/forecast" className="self-start text-sm font-medium text-brass hover:underline">
-          More details →
-        </Link>
+        <Collapsible open={open} onOpenChange={setOpen}>
+          <CollapsibleTrigger className="flex items-center gap-1 self-start text-sm font-medium text-brass hover:underline">
+            {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+            {open ? "Hide forecast breakdown" : "Show forecast breakdown"}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="flex flex-col gap-4 pt-4">
+            {isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading forecast breakdown...</p>
+            ) : isError || !data ? (
+              <QueryErrorState message="Failed to load the forecast breakdown." onRetry={() => refetch()} isRetrying={isRefetching} />
+            ) : (
+              <>
+                <div>
+                  <p className="mb-1.5 text-sm font-medium text-foreground">Demand vs supply by trade</p>
+                  <ForecastMatrix roles={data.roles} matrix={data.matrix} />
+                </div>
+                <div>
+                  <p className="mb-1.5 text-sm font-medium text-foreground">Capacity heatmap — trade × week</p>
+                  <ForecastHeatmap trades={data.roles} heatmap={data.heatmap} />
+                </div>
+              </>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
     </Card>
   );

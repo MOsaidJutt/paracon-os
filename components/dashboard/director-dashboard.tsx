@@ -2,15 +2,31 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { ChevronDown, ChevronRight, Settings2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { QueryErrorState } from "@/components/shared/query-error-state";
 import { CapacityHeadroomCard } from "@/components/forecast/capacity-headroom";
-import { ProjectHealthBadge } from "@/components/dashboard/project-health-badge";
+import { ProjectRowHoverCard } from "@/components/dashboard/project-row-hover-card";
 import { AlertsPanel } from "@/components/dashboard/alerts-panel";
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
+import { SortableWidget } from "@/components/dashboard/sortable-widget";
+import { useDashboardLayout } from "@/components/dashboard/use-dashboard-layout";
+import { DASHBOARD_WIDGETS } from "@/lib/dashboard/widget-registry";
 import { StaffScorecardPanel } from "@/components/scorecard/staff-scorecard-panel";
-import { formatCurrency, formatDate, formatPercent } from "@/lib/tenders/format";
+import { ScoreGauge, bandForScore } from "@/components/scorecard/score-gauge";
+import { formatCurrency, formatDate } from "@/lib/tenders/format";
 import type { CapacityHeadroom } from "@/lib/forecast/engine";
 import type { Alert } from "@/lib/dashboard/alerts";
 import type { ProjectHealthStatus } from "@/lib/dashboard/health";
@@ -26,6 +42,8 @@ type DirectorDashboardResponse = {
 };
 type ProjectsResponse = { projects: { id: string; name: string; code: string }[] };
 
+const TITLE_BY_ID = Object.fromEntries(DASHBOARD_WIDGETS.director.map((w) => [w.id, w.title]));
+
 function DashboardSkeleton() {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -36,8 +54,65 @@ function DashboardSkeleton() {
   );
 }
 
+function CriticalDatesCard({ criticalDates }: { criticalDates: DirectorDashboardResponse["criticalDates"] }) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? criticalDates : criticalDates.slice(0, 5);
+  const remaining = criticalDates.length - visible.length;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Critical dates — next 30 days</CardTitle>
+        <CardDescription>Auto-derived from critical activities across every project.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {criticalDates.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No critical dates in the next 30 days.</p>
+        ) : (
+          <>
+            <ul className="flex flex-col gap-1.5">
+              {visible.map((m) => (
+                <li key={m.id} className="flex items-center justify-between text-sm">
+                  <span className="text-foreground">
+                    {m.project.name} <span className="text-muted-foreground">({m.project.code})</span> — {m.name}
+                  </span>
+                  <span className="text-muted-foreground">{formatDate(m.date)}</span>
+                </li>
+              ))}
+            </ul>
+            {remaining > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowAll(true)}
+                className="mt-2 flex items-center gap-1 text-sm font-medium text-brass hover:underline"
+              >
+                <ChevronRight className="size-4" /> Show {remaining} more
+              </button>
+            )}
+            {showAll && criticalDates.length > 5 && (
+              <button
+                type="button"
+                onClick={() => setShowAll(false)}
+                className="mt-2 flex items-center gap-1 text-sm font-medium text-brass hover:underline"
+              >
+                <ChevronDown className="size-4" /> Show fewer
+              </button>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function DirectorDashboard({ canAssessScorecard }: { canAssessScorecard: boolean }) {
   const [projectId, setProjectId] = useState<string | undefined>(undefined);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+  const { layout, isLoading: layoutLoading, editing, setDraft, startEditing, finishEditing, isSaving } =
+    useDashboardLayout("director");
 
   const { data: projectOptions } = useQuery({
     queryKey: ["projects", "options"],
@@ -57,129 +132,149 @@ export function DirectorDashboard({ canAssessScorecard }: { canAssessScorecard: 
     },
   });
 
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <DashboardFilters projects={projectOptions?.projects ?? []} projectId={projectId} onProjectChange={setProjectId} />
-      </div>
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const oldIndex = prev.findIndex((w) => w.id === active.id);
+      const newIndex = prev.findIndex((w) => w.id === over.id);
+      return arrayMove(prev, oldIndex, newIndex);
+    });
+  }
 
-      {isLoading ? (
-        <DashboardSkeleton />
-      ) : isError || !data ? (
-        <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-border p-6">
-          <p className="text-sm text-destructive">Failed to load the dashboard.</p>
-          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}>
-            {isRefetching ? "Retrying..." : "Retry"}
-          </Button>
-        </div>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+  function renderWidget(id: string, d: DirectorDashboardResponse) {
+    switch (id) {
+      case "project-health":
+        return (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Project health</CardTitle>
-              <CardDescription>On Track / Attention / Critical, derived from dates, issues and labour cover.</CardDescription>
+              <CardDescription>On Track / Attention / Critical, derived from dates, issues and labour cover. Hover a project for why.</CardDescription>
             </CardHeader>
             <CardContent>
-              {data.projects.length === 0 ? (
+              {d.projects.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No projects yet.</p>
               ) : (
-                <ul className="flex flex-col gap-2">
-                  {data.projects.map((p) => (
-                    <li key={p.id} className="flex items-center justify-between text-sm">
-                      <span className="text-foreground">
-                        {p.name} <span className="text-muted-foreground">({p.code})</span>
-                      </span>
-                      <ProjectHealthBadge status={p.status} />
+                <ul className="flex flex-col gap-0.5">
+                  {d.projects.map((p) => (
+                    <li key={p.id}>
+                      <ProjectRowHoverCard {...p} />
                     </li>
                   ))}
                 </ul>
               )}
             </CardContent>
           </Card>
-
+        );
+      case "at-risk":
+        return (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">At-risk projects</CardTitle>
-              <CardDescription>Attention/Critical projects, worst first, with the reason.</CardDescription>
+              <CardDescription>Attention/Critical projects, worst first. Hover for the reason.</CardDescription>
             </CardHeader>
             <CardContent>
-              {data.atRisk.length === 0 ? (
+              {d.atRisk.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  {data.projects.length === 0 ? "No projects yet." : "Nothing at risk — every project is On Track."}
+                  {d.projects.length === 0 ? "No projects yet." : "Nothing at risk — every project is On Track."}
                 </p>
               ) : (
-                <ul className="flex flex-col gap-3">
-                  {data.atRisk.map((p) => (
-                    <li key={p.id} className="flex flex-col gap-1">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium text-foreground">
-                          {p.name} <span className="font-normal text-muted-foreground">({p.code})</span>
-                        </span>
-                        <ProjectHealthBadge status={p.status} />
-                      </div>
-                      <p className="text-xs text-muted-foreground">{p.reasons.join(" · ")}</p>
+                <ul className="flex flex-col gap-0.5">
+                  {d.atRisk.map((p) => (
+                    <li key={p.id}>
+                      <ProjectRowHoverCard {...p} />
                     </li>
                   ))}
                 </ul>
               )}
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Critical dates — next 30 days</CardTitle>
-              <CardDescription>Auto-derived from critical activities across every project.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {data.criticalDates.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No critical dates in the next 30 days.</p>
-              ) : (
-                <ul className="flex flex-col gap-1.5">
-                  {data.criticalDates.slice(0, 10).map((m) => (
-                    <li key={m.id} className="flex items-center justify-between text-sm">
-                      <span className="text-foreground">
-                        {m.project.name} <span className="text-muted-foreground">({m.project.code})</span> — {m.name}
-                      </span>
-                      <span className="text-muted-foreground">{formatDate(m.date)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-
+        );
+      case "critical-dates":
+        return <CriticalDatesCard criticalDates={d.criticalDates} />;
+      case "pipeline": {
+        const winRateScore = Math.round(d.pipeline.winRateValue * 100);
+        return (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Pipeline snapshot</CardTitle>
               <CardDescription>Tender pipeline weighted by win probability.</CardDescription>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-muted-foreground">Weighted pipeline</p>
-                <p className="text-lg font-semibold text-foreground">{formatCurrency(data.pipeline.weightedPipeline)}</p>
+            <CardContent className="flex items-center justify-between gap-4">
+              <div className="grid flex-1 grid-cols-3 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">Weighted pipeline</p>
+                  <p className="text-lg font-semibold text-foreground">{formatCurrency(d.pipeline.weightedPipeline)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Total pipeline</p>
+                  <p className="text-lg font-semibold text-foreground">{formatCurrency(d.pipeline.totalPipeline)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Active bids</p>
+                  <p className="text-lg font-semibold text-foreground">{d.pipeline.activeBids}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Total pipeline</p>
-                <p className="text-lg font-semibold text-foreground">{formatCurrency(data.pipeline.totalPipeline)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Active bids</p>
-                <p className="text-lg font-semibold text-foreground">{data.pipeline.activeBids}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Win rate (value)</p>
-                <p className="text-lg font-semibold text-foreground">{formatPercent(data.pipeline.winRateValue)}</p>
-              </div>
+              <ScoreGauge value={winRateScore} band={bandForScore(winRateScore, 50, 25)} size={84} label="Win rate" />
             </CardContent>
           </Card>
+        );
+      }
+      case "capacity":
+        return <CapacityHeadroomCard headroom={d.capacity} />;
+      case "alerts":
+        return <AlertsPanel alerts={d.alerts} />;
+      case "scorecard":
+        return <StaffScorecardPanel canAssess={canAssessScorecard} />;
+      default:
+        return null;
+    }
+  }
 
-          <CapacityHeadroomCard headroom={data.capacity} />
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between gap-3">
+        <DashboardFilters projects={projectOptions?.projects ?? []} projectId={projectId} onProjectChange={setProjectId} />
+        {!isLoading && data && (
+          <Button variant="outline" size="sm" onClick={editing ? finishEditing : startEditing} disabled={isSaving}>
+            <Settings2 className="size-4" />
+            {editing ? (isSaving ? "Saving..." : "Done") : "Customize"}
+          </Button>
+        )}
+      </div>
 
-          <AlertsPanel alerts={data.alerts} />
-        </div>
+      {isLoading || layoutLoading ? (
+        <DashboardSkeleton />
+      ) : isError || !data ? (
+        <QueryErrorState message="Failed to load the dashboard." onRetry={() => refetch()} isRetrying={isRefetching} />
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={layout.map((w) => w.id)} strategy={rectSortingStrategy}>
+            <div className="grid gap-4 lg:grid-cols-2">
+              {layout.map((w) => (
+                <SortableWidget
+                  key={w.id}
+                  id={w.id}
+                  editing={editing}
+                  visible={w.visible}
+                  onToggleVisible={() =>
+                    setDraft((prev) =>
+                      prev ? prev.map((x) => (x.id === w.id ? { ...x, visible: !x.visible } : x)) : prev
+                    )
+                  }
+                  className={w.id === "scorecard" ? "lg:col-span-2" : undefined}
+                >
+                  {editing && (
+                    <p className="px-3 pt-2 text-xs font-medium text-muted-foreground">{TITLE_BY_ID[w.id] ?? w.id}</p>
+                  )}
+                  {renderWidget(w.id, data)}
+                </SortableWidget>
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
-
-      <StaffScorecardPanel canAssess={canAssessScorecard} />
     </div>
   );
 }

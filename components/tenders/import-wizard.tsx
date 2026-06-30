@@ -134,7 +134,7 @@ export function ImportWizard() {
             </div>
 
             {preview.configWarnings.length > 0 && (
-              <div className="flex flex-col gap-1 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              <div className="flex flex-col gap-1 rounded-md border border-rag-amber/40 bg-rag-amber/15 p-3 text-sm text-foreground">
                 {preview.configWarnings.map((w, i) => (
                   <div key={i} className="flex items-start gap-2">
                     <AlertTriangle className="mt-0.5 size-4 shrink-0" />
@@ -179,7 +179,7 @@ export function ImportWizard() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <CheckCircle2 className="size-5 text-green-600" />
+              <CheckCircle2 className="size-5 text-rag-green" />
               Import report
             </CardTitle>
           </CardHeader>

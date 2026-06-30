@@ -24,7 +24,7 @@ export function PerformanceRadar({ scores }: { scores: PerformanceScores }) {
           <PolarGrid />
           <PolarAngleAxis dataKey="metric" tick={{ fontSize: 12 }} />
           <PolarRadiusAxis domain={[0, 5]} tick={{ fontSize: 10 }} />
-          <Radar dataKey="value" stroke="#B08D57" fill="#B08D57" fillOpacity={0.35} />
+          <Radar dataKey="value" stroke="#6b4f43" fill="#6b4f43" fillOpacity={0.35} />
         </RadarChart>
       </ResponsiveContainer>
     </div>

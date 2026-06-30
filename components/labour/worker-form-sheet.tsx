@@ -116,6 +116,7 @@ export function WorkerFormSheet({
     onSuccess: () => {
       toast.success(isEdit ? "Worker updated" : "Worker added");
       queryClient.invalidateQueries({ queryKey: ["labour"] });
+      if (isEdit) queryClient.invalidateQueries({ queryKey: ["audit-trail", "Worker", worker!.id] });
       onOpenChange(false);
     },
     onError: (error: Error) => toast.error(error.message),

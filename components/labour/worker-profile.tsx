@@ -17,6 +17,7 @@ import { SkillEditor } from "./skill-editor";
 import { ComplianceBadge } from "./compliance-badge";
 import { AvailabilityCalendar } from "./availability-calendar";
 import { WorkerAllocations } from "./worker-allocations";
+import { AuditTrail } from "@/components/audit/audit-trail";
 
 type ApiWorker = WorkerRow & {
   photoUrl: string | null;
@@ -144,6 +145,10 @@ export function WorkerProfile({ workerId }: { workerId: string }) {
               </Card>
             </>
           )}
+
+          <div className="sm:col-span-2">
+            <AuditTrail entityType="Worker" entityId={worker.id} />
+          </div>
         </TabsContent>
 
         <TabsContent value="compliance">

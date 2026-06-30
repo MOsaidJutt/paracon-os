@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { QueryErrorState } from "@/components/shared/query-error-state";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/lib/tenders/format";
 import { roundShortfall } from "@/lib/forecast/format";
@@ -144,14 +145,7 @@ export function AllocationGrid({ projectId, projectName }: { projectId: string; 
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading the allocation grid...</p>;
   if (isError) {
-    return (
-      <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-border p-6">
-        <p className="text-sm text-destructive">Failed to load the allocation grid.</p>
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          Retry
-        </Button>
-      </div>
-    );
+    return <QueryErrorState message="Failed to load the allocation grid." onRetry={() => refetch()} />;
   }
   if (!data || data.roles.length === 0) {
     return (
