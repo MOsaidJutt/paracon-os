@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCurrency, formatDate } from "@/lib/tenders/format";
 import { ProjectFormSheet, type ProjectRow } from "./project-form-sheet";
 import { ActivityFormSheet, type ActivityRow } from "./activity-form-sheet";
@@ -21,6 +20,8 @@ import { FinancialsTab } from "@/components/finance/financials-tab";
 import { DeliveryRegister } from "@/components/finance/delivery-register";
 import { SiteUpdatesPanel } from "@/components/site/site-updates-panel";
 import { IssuesPanel } from "@/components/site/issues-panel";
+import { TaskTreeTable, DEFAULT_SCHEDULE_COLUMNS, type ScheduleColumn } from "@/components/schedule/task-tree-table";
+import { BaselinesPanel } from "@/components/schedule/baselines-panel";
 
 type ApiProject = ProjectRow & {
   client: { id: string; name: string };
@@ -28,7 +29,11 @@ type ApiProject = ProjectRow & {
   foremanUser: { id: string; name: string } | null;
   sourceTender: { id: string; projectName: string } | null;
   milestones: { id: string; name: string; date: string }[];
+  scheduleColumnsJson: ScheduleColumn[] | null;
 };
+
+type DependencyEdge = { id: string; predecessorId: string; successorId: string };
+type BaselineSummary = { id: string; name: string };
 
 function statusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
   if (status === "Critical") return "destructive";
@@ -37,6 +42,7 @@ function statusVariant(status: string): "default" | "secondary" | "destructive" 
 }
 
 export function ProjectDetail({ projectId }: { projectId: string }) {
+  const queryClient = useQueryClient();
   const [editSheetOpen, setEditSheetOpen] = useState(false);
   const [activitySheetOpen, setActivitySheetOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<ActivityRow | null>(null);
@@ -59,10 +65,47 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     },
   });
 
+  const { data: dependenciesData } = useQuery({
+    queryKey: ["projects", projectId, "dependencies"],
+    queryFn: async () => {
+      const res = await fetch(`/api/projects/${projectId}/dependencies`);
+      if (!res.ok) throw new Error("Failed to load dependencies");
+      return (await res.json()) as { dependencies: DependencyEdge[] };
+    },
+  });
+
+  const { data: baselinesData } = useQuery({
+    queryKey: ["projects", projectId, "baselines"],
+    queryFn: async () => {
+      const res = await fetch(`/api/projects/${projectId}/baselines`);
+      if (!res.ok) throw new Error("Failed to load baselines");
+      return (await res.json()) as { baselines: BaselineSummary[] };
+    },
+  });
+
+  const columnsMutation = useMutation({
+    mutationFn: async (columns: ScheduleColumn[]) => {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scheduleColumnsJson: columns }),
+      });
+      if (!res.ok) throw new Error("Failed to save column preferences");
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects", projectId] }),
+  });
+
   if (isLoading || !data) return <p className="text-sm text-muted-foreground">Loading project...</p>;
 
   const project = data.project;
   const activities = activitiesData?.activities ?? [];
+  const dependencies = dependenciesData?.dependencies ?? [];
+  const baselines = baselinesData?.baselines ?? [];
+  const scheduleColumns = project.scheduleColumnsJson && project.scheduleColumnsJson.length > 0
+    ? project.scheduleColumnsJson
+    : DEFAULT_SCHEDULE_COLUMNS;
+  const otherActivities = activities.map((a) => ({ id: a.id, name: a.name }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -182,8 +225,10 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           </div>
 
           <GanttView
+            projectId={projectId}
             activities={activities.map((a) => ({
               id: a.id,
+              parentId: a.parentId,
               name: a.name,
               trade: a.trade,
               startDate: a.startDate,
@@ -191,7 +236,35 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
               isCritical: a.isCritical,
               status: a.status,
             }))}
+            dependencies={dependencies}
+            canEdit
+            baselines={baselines}
           />
+
+          <TaskTreeTable
+            activities={activities.map((a) => ({
+              id: a.id,
+              parentId: a.parentId,
+              name: a.name,
+              trade: a.trade,
+              startDate: a.startDate,
+              endDate: a.endDate,
+              status: a.status,
+              isCritical: a.isCritical,
+              floatDays: a.floatDays,
+            }))}
+            columns={scheduleColumns}
+            onColumnsChange={(columns) => columnsMutation.mutate(columns)}
+            onRowClick={(row) => {
+              const full = activities.find((a) => a.id === row.id);
+              if (full) {
+                setEditingActivity(full);
+                setActivitySheetOpen(true);
+              }
+            }}
+          />
+
+          <BaselinesPanel projectId={projectId} canEdit />
 
           <CalendarView
             activities={activities.map((a) => ({
@@ -204,47 +277,6 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             }))}
             milestones={project.milestones}
           />
-
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Activity</TableHead>
-                  <TableHead>Trade</TableHead>
-                  <TableHead>Start</TableHead>
-                  <TableHead>End</TableHead>
-                  <TableHead>Critical</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {activities.map((a) => (
-                  <TableRow
-                    key={a.id}
-                    className="cursor-pointer"
-                    onClick={() => {
-                      setEditingActivity(a);
-                      setActivitySheetOpen(true);
-                    }}
-                  >
-                    <TableCell className="font-medium text-foreground">{a.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{a.trade}</TableCell>
-                    <TableCell>{formatDate(a.startDate)}</TableCell>
-                    <TableCell>{formatDate(a.endDate)}</TableCell>
-                    <TableCell>{a.isCritical ? <Badge variant="destructive">Critical</Badge> : "—"}</TableCell>
-                    <TableCell className="text-muted-foreground">{a.status}</TableCell>
-                  </TableRow>
-                ))}
-                {activities.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground">
-                      No program activities yet.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
         </TabsContent>
 
         <TabsContent value="labour">
@@ -280,6 +312,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         onOpenChange={setActivitySheetOpen}
         projectId={projectId}
         activity={editingActivity}
+        otherActivities={otherActivities}
       />
     </div>
   );

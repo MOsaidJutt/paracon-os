@@ -12,12 +12,12 @@ const day = (n: number) => new Date(BASE + n * 86_400_000);
 
 describe("deriveMilestones", () => {
   const activities: ActivityForMilestone[] = [
-    { id: "a1", name: "Ceiling grid", endDate: day(10), isCritical: false, milestoneType: null },
-    { id: "a2", name: "Services rough-in", endDate: day(20), isCritical: true, milestoneType: "Services Rough-In" },
-    { id: "a3", name: "Final fitout", endDate: day(40), isCritical: true, milestoneType: null },
+    { id: "a1", name: "Ceiling grid", endDate: day(10), isMilestone: false, milestoneType: null },
+    { id: "a2", name: "Services rough-in", endDate: day(20), isMilestone: true, milestoneType: "Services Rough-In" },
+    { id: "a3", name: "Final fitout", endDate: day(40), isMilestone: true, milestoneType: null },
   ];
 
-  it("only derives a milestone for critical activities", () => {
+  it("only derives a milestone for activities flagged isMilestone", () => {
     const milestones = deriveMilestones(activities);
     expect(milestones).toHaveLength(2);
     expect(milestones.map((m) => m.sourceActivityId)).toEqual(["a2", "a3"]);
@@ -61,7 +61,7 @@ describe("filterUpcomingMilestones", () => {
 describe("aggregateLabourDemand", () => {
   it("sums per-role headcount across every week an activity spans", () => {
     const activities: ActivityForDemand[] = [
-      { startDate: day(0), endDate: day(13), labourRequired: { Carpenter: 4, Electrician: 2 } },
+      { id: "a1", parentId: null, startDate: day(0), endDate: day(13), labourRequired: { Carpenter: 4, Electrician: 2 } },
     ];
     const demand = aggregateLabourDemand(activities);
     const weeks = Object.keys(demand).sort();
@@ -72,8 +72,8 @@ describe("aggregateLabourDemand", () => {
 
   it("combines overlapping activities into the same week's totals", () => {
     const activities: ActivityForDemand[] = [
-      { startDate: day(0), endDate: day(4), labourRequired: { Carpenter: 4 } },
-      { startDate: day(0), endDate: day(4), labourRequired: { Carpenter: 2, Plumber: 1 } },
+      { id: "a1", parentId: null, startDate: day(0), endDate: day(4), labourRequired: { Carpenter: 4 } },
+      { id: "a2", parentId: null, startDate: day(0), endDate: day(4), labourRequired: { Carpenter: 2, Plumber: 1 } },
     ];
     const demand = aggregateLabourDemand(activities);
     const week = Object.values(demand)[0];
@@ -81,8 +81,20 @@ describe("aggregateLabourDemand", () => {
   });
 
   it("keys weeks by the Monday of the ISO week, regardless of which weekday the activity starts on", () => {
-    const activities: ActivityForDemand[] = [{ startDate: day(2), endDate: day(2), labourRequired: { Painter: 1 } }];
+    const activities: ActivityForDemand[] = [
+      { id: "a1", parentId: null, startDate: day(2), endDate: day(2), labourRequired: { Painter: 1 } },
+    ];
     const demand = aggregateLabourDemand(activities);
     expect(Object.keys(demand)).toEqual(["2026-01-05"]);
+  });
+
+  it("excludes a parent/phase row's own labourRequired so children aren't double-counted", () => {
+    const activities: ActivityForDemand[] = [
+      { id: "phase1", parentId: null, startDate: day(0), endDate: day(4), labourRequired: { Carpenter: 99 } },
+      { id: "task1", parentId: "phase1", startDate: day(0), endDate: day(4), labourRequired: { Carpenter: 3 } },
+    ];
+    const demand = aggregateLabourDemand(activities);
+    const week = Object.values(demand)[0];
+    expect(week).toEqual({ Carpenter: 3 });
   });
 });

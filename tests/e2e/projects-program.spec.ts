@@ -60,7 +60,7 @@ test("director can build a project's program with a critical date and weekly lab
   await page.getByLabel("Start date").fill(start);
   await page.getByLabel("End date").fill(end);
 
-  await page.getByLabel("Critical date").click();
+  await page.getByLabel("Milestone").click();
   await page.getByLabel("Milestone type").click();
   await page.getByRole("option", { name: "Services Rough-In" }).click();
 

@@ -67,6 +67,9 @@ model Organisation {
   issues              Issue[]
   staffScores         StaffScore[]
   productivityRecords ProductivityRecord[]
+  dependencies        Dependency[]
+  delayRecords        DelayRecord[]
+  baselines           Baseline[]
 }
 
 // ─── Documents & Templates engine ────────────────────────────────────────────
@@ -194,6 +197,8 @@ model User {
   dailySiteUpdatesAsForeman DailySiteUpdate[]   @relation("DailySiteUpdateForeman")
   issuesRaised              Issue[]             @relation("IssueRaisedBy")
   staffScoresAssessed       StaffScore[]        @relation("StaffScoreAssessedBy")
+  delayRecordsChanged       DelayRecord[]
+  baselinesSaved            Baseline[]
 
   @@unique([organisationId, email])
   @@index([roleId])
@@ -512,37 +517,41 @@ model Prospect {
 // the Tender pipeline's CONFIG NOT CODE approach.
 
 model Project {
-  id             String       @id @default(cuid())
-  organisationId String
-  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  name           String
-  code           String
-  address        String?
-  status         String
-  value          Float        @default(0)
-  startDate      DateTime
-  endDate        DateTime
-  clientId       String
-  client         Client       @relation(fields: [clientId], references: [id])
-  sourceTenderId String?      @unique
-  sourceTender   Tender?      @relation(fields: [sourceTenderId], references: [id])
-  pmUserId       String?
-  pmUser         User?        @relation("ProjectPm", fields: [pmUserId], references: [id])
+  id                  String       @id @default(cuid())
+  organisationId      String
+  organisation        Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  name                String
+  code                String
+  address             String?
+  status              String
+  value               Float        @default(0)
+  startDate           DateTime
+  endDate             DateTime
+  clientId            String
+  client              Client       @relation(fields: [clientId], references: [id])
+  sourceTenderId      String?      @unique
+  sourceTender        Tender?      @relation(fields: [sourceTenderId], references: [id])
+  pmUserId            String?
+  pmUser              User?        @relation("ProjectPm", fields: [pmUserId], references: [id])
   // One foreman per active site (org chart: "one per active site") — resolved
   // by /api/site/today so a foreman lands on their project with zero taps.
-  foremanUserId  String?
-  foremanUser    User?        @relation("ProjectForeman", fields: [foremanUserId], references: [id])
+  foremanUserId       String?
+  foremanUser         User?        @relation("ProjectForeman", fields: [foremanUserId], references: [id])
   // [{ name: "Partitions", contractValue: number }] — carried from the source
   // Tender on conversion (enter once); feeds the Progress Claim's CONTRACT
   // WORK rows and is editable on the project if the contract is varied.
-  tradePackages  Json?
+  tradePackages       Json?
   // Internal budgeted COST (distinct from `value`, the client-facing contract
   // sell price) — the other half of cost-vs-budget/margin. Null until a PM
   // sets it; financials derivation treats a null budget as "not yet set"
   // rather than zero.
-  costBudget     Float?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  costBudget          Float?
+  // Saved column visibility/order for this project's schedule (Gantt + task
+  // table) view — shared by anyone who opens the schedule, not per-user, per
+  // the Buildpass reference ("saved per schedule"). Null means "use defaults".
+  scheduleColumnsJson Json?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
   activities ProgramActivity[]
   milestones Milestone[]
@@ -561,6 +570,8 @@ model Project {
   dailySiteUpdates    DailySiteUpdate[]
   issues              Issue[]
   productivityRecords ProductivityRecord[]
+  baselines           Baseline[]
+  delayRecords        DelayRecord[]
 
   @@unique([organisationId, code])
   @@index([organisationId, status])
@@ -568,29 +579,154 @@ model Project {
   @@index([organisationId, pmUserId])
 }
 
+// parentId makes this a self-referencing tree (phases -> tasks -> sub-tasks,
+// unlimited depth rather than a rigid 3-level enum) — the Scheduling & Gantt
+// module's task hierarchy. isCritical/floatDays are now SERVER-COMPUTED ONLY
+// by lib/schedule/critical-path.ts (never accepted from API input) — replaces
+// the old manually-set flag now that real CPM dependency data exists.
+// labourRequired is only meaningful on LEAF activities (no children); a
+// parent/phase row's own labourRequired is ignored by
+// lib/projects/calculations.ts#aggregateLabourDemand to avoid double-counting
+// against the Phase 5 forecast engine.
 model ProgramActivity {
+  id             String            @id @default(cuid())
+  organisationId String
+  organisation   Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  projectId      String
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentId       String?
+  parent         ProgramActivity?  @relation("ProgramActivityHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children       ProgramActivity[] @relation("ProgramActivityHierarchy")
+  // Manual sibling order within the same parent (drag-to-reorder in the task tree table).
+  orderIndex     Int               @default(0)
+  name           String
+  trade          String
+  startDate      DateTime
+  endDate        DateTime
+  isCritical     Boolean           @default(false)
+  // Total slack (days) before this activity would itself become critical — null until the
+  // critical-path engine has run at least once over this project's dependency graph.
+  floatDays      Int?
+  // User-set "this is a key date" flag — DISTINCT from isCritical (which is
+  // CPM-computed slack, not a business-significant date). deriveMilestones()
+  // creates a project Milestone from any activity with isMilestone=true,
+  // independent of whether that activity also happens to sit on the
+  // (computed) critical path.
+  isMilestone    Boolean           @default(false)
+  milestoneType  String?
+  status         String
+  // Record<role, count> — crew size required per role each week this activity is active.
+  labourRequired Json
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  milestones                Milestone[]
+  taskProgress              TaskProgress[]
+  dependenciesAsPredecessor Dependency[]   @relation("DependencyPredecessor")
+  dependenciesAsSuccessor   Dependency[]   @relation("DependencySuccessor")
+  delayRecords              DelayRecord[]
+
+  @@index([organisationId])
+  @@index([projectId, startDate])
+  @@index([parentId])
+}
+
+// ─── Scheduling & Gantt (dependencies, delay tracking, baselines) ────────────
+// Models a real-world dependency between two tasks in the SAME project's
+// program (validated at the route layer, not by an FK, since predecessor and
+// successor only need to share a projectId, not a direct relation to it).
+// lagDays is signed: positive = lag (gap), negative = lead (overlap) — both
+// screenshots 4's "Add lag or lead to any dependency" map onto one field.
+enum DependencyType {
+  FINISH_TO_START
+  START_TO_START
+  FINISH_TO_FINISH
+  START_TO_FINISH
+}
+
+model Dependency {
+  id             String          @id @default(cuid())
+  organisationId String
+  organisation   Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  predecessorId  String
+  predecessor    ProgramActivity @relation("DependencyPredecessor", fields: [predecessorId], references: [id], onDelete: Cascade)
+  successorId    String
+  successor      ProgramActivity @relation("DependencySuccessor", fields: [successorId], references: [id], onDelete: Cascade)
+  type           DependencyType  @default(FINISH_TO_START)
+  lagDays        Int             @default(0)
+  createdAt      DateTime        @default(now())
+
+  @@unique([predecessorId, successorId])
+  @@index([organisationId])
+  @@index([predecessorId])
+  @@index([successorId])
+}
+
+// Structured, reportable record of every time a task slipped to a LATER date —
+// the EOT/Notice-of-Delays evidence trail (FEEDBACK_NOTES §3). Distinct from
+// the generic AuditLog (which still gets a mirroring entry too): this table is
+// the queryable "how many slips, what caused them" source, with the cascade
+// of every downstream task the push affected snapshotted at save time so the
+// record stays meaningful even if those tasks change again later.
+model DelayRecord {
+  id                     String          @id @default(cuid())
+  organisationId         String
+  organisation           Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  projectId              String
+  project                Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  activityId             String
+  activity               ProgramActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  previousStartDate      DateTime
+  previousEndDate        DateTime
+  newStartDate           DateTime
+  newEndDate             DateTime
+  // Config-driven (schedule.delayReasonList) — Material Delay, Weather, Sub No Show, etc.
+  reason                 String
+  note                   String?
+  // [{ activityId, name, previousStartDate, previousEndDate, newStartDate, newEndDate }]
+  downstreamImpactedJson Json            @default("[]")
+  changedByUserId        String?
+  changedBy              User?           @relation(fields: [changedByUserId], references: [id], onDelete: SetNull)
+  createdAt              DateTime        @default(now())
+
+  @@index([organisationId, projectId])
+  @@index([activityId])
+}
+
+// One snapshot of every activity's dates at the moment a baseline was saved —
+// backs Buildpass-style "compare current vs original plan" EOT evidence.
+// activityId is a plain string (NOT an FK) so a baseline survives a task being
+// later renamed or deleted; the Gantt overlay falls back to the snapshotted
+// name/dates if the live task is gone.
+model Baseline {
   id             String       @id @default(cuid())
   organisationId String
   organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   projectId      String
   project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name           String
-  trade          String
-  startDate      DateTime
-  endDate        DateTime
-  isCritical     Boolean      @default(false)
-  milestoneType  String?
-  status         String
-  // Record<role, count> — crew size required per role each week this activity is active.
-  labourRequired Json
+  note           String?
+  savedByUserId  String?
+  savedBy        User?        @relation(fields: [savedByUserId], references: [id], onDelete: SetNull)
   createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
 
-  milestones   Milestone[]
-  taskProgress TaskProgress[]
+  tasks BaselineTask[]
 
-  @@index([organisationId])
-  @@index([projectId, startDate])
+  @@index([organisationId, projectId])
+}
+
+model BaselineTask {
+  id         String   @id @default(cuid())
+  baselineId String
+  baseline   Baseline @relation(fields: [baselineId], references: [id], onDelete: Cascade)
+  activityId String
+  name       String
+  parentId   String?
+  trade      String
+  startDate  DateTime
+  endDate    DateTime
+
+  @@index([baselineId])
 }
 
 model Milestone {

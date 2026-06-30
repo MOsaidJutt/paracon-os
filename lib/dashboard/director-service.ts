@@ -24,7 +24,7 @@ export type DirectorDashboard = {
 
 /** Per-project labour shortfall for the current week + the health config's watch window, used only to feed computeProjectHealth. */
 function computeWeeklyShortfall(
-  activities: { startDate: Date; endDate: Date; labourRequired: Record<string, number> }[],
+  activities: { id: string; parentId: string | null; startDate: Date; endDate: Date; labourRequired: Record<string, number> }[],
   allocations: { weekStart: Date; trade: string }[],
   weeks: string[]
 ): number[] {
@@ -69,7 +69,7 @@ export async function getDirectorDashboard(
           code: true,
           milestones: { select: { date: true } },
           issues: { where: { status: { not: "Resolved" } }, select: { severity: true } },
-          activities: { select: { startDate: true, endDate: true, labourRequired: true } },
+          activities: { select: { id: true, parentId: true, startDate: true, endDate: true, labourRequired: true } },
           allocations: { select: { weekStart: true, worker: { select: { capability: true } } } },
         },
         orderBy: { name: "asc" },

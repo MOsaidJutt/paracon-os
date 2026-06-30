@@ -7,6 +7,7 @@ import { NotFoundError } from "@/lib/errors";
 import { createActivitySchema } from "@/lib/validations/project";
 import { assertInList, loadProjectConfig } from "@/lib/projects/config";
 import { syncProjectMilestones } from "@/lib/projects/sync";
+import { recomputeCriticalPath } from "@/lib/schedule/recompute";
 import { sendEvent } from "@/lib/inngest/send-safe";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -43,21 +44,29 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     assertInList(body.status, config.activityStatusList, "status");
     if (body.milestoneType) assertInList(body.milestoneType, config.milestoneTypeList, "milestoneType");
 
+    if (body.parentId) {
+      const parent = await db.programActivity.findFirst({ where: { id: body.parentId, projectId: params.id } });
+      if (!parent) return NextResponse.json({ error: "Parent task not found in this project" }, { status: 400 });
+    }
+
     const activity = await db.programActivity.create({
       data: {
         organisationId: session.user.organisationId,
         projectId: params.id,
+        parentId: body.parentId ?? null,
+        orderIndex: body.orderIndex ?? 0,
         name: body.name,
         trade: body.trade,
         startDate: body.startDate,
         endDate: body.endDate,
-        isCritical: body.isCritical,
+        isMilestone: body.isMilestone,
         milestoneType: body.milestoneType,
         status: body.status,
         labourRequired: body.labourRequired,
       },
     });
 
+    await recomputeCriticalPath(db, params.id);
     await syncProjectMilestones(db, session.user.organisationId, params.id);
 
     await auditLog({
@@ -66,7 +75,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       action: "program_activity.create",
       entityType: "ProgramActivity",
       entityId: activity.id,
-      after: { name: activity.name, trade: activity.trade, isCritical: activity.isCritical },
+      after: { name: activity.name, trade: activity.trade, parentId: activity.parentId },
     });
     await sendEvent("forecast/recompute.requested");
 

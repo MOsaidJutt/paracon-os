@@ -26,6 +26,14 @@ export const createProjectSchema = z.object({
   foremanUserId: z.string().optional().nullable(),
 });
 
+// One entry per task-tree-table column, in display order — drag-to-reorder on
+// the schedule view persists by rewriting this whole array. Shared by anyone
+// who opens the schedule ("saved per schedule", not per-user).
+export const scheduleColumnSchema = z.object({
+  key: z.string().min(1),
+  visible: z.boolean(),
+});
+
 export const updateProjectSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   code: z.string().min(1).max(40).optional(),
@@ -39,6 +47,9 @@ export const updateProjectSchema = z.object({
   foremanUserId: z.string().optional().nullable(),
   tradePackages: z.array(tradePackageSchema).optional(),
   costBudget: z.number().min(0).optional().nullable(),
+  // Empty array (not null — Prisma's nullable-Json update needs a sentinel,
+  // and this avoids it) resets to the task-tree-table's built-in defaults.
+  scheduleColumnsJson: z.array(scheduleColumnSchema).optional(),
 });
 
 export const listProjectsQuerySchema = z.object({
@@ -49,13 +60,17 @@ export const listProjectsQuerySchema = z.object({
   sortDir: z.enum(["asc", "desc"]).default("asc"),
 });
 
+// isCritical is intentionally absent here — it's server-computed only by
+// lib/schedule/critical-path.ts, never accepted from API input.
 export const createActivitySchema = z
   .object({
     name: z.string().min(1, "Name is required").max(200),
     trade: z.string().min(1, "Trade is required"),
     startDate: isoDate,
     endDate: isoDate,
-    isCritical: z.boolean().default(false),
+    parentId: z.string().optional().nullable(),
+    orderIndex: z.number().int().optional(),
+    isMilestone: z.boolean().default(false),
     milestoneType: z.string().optional().nullable(),
     status: z.string().min(1, "Status is required"),
     labourRequired: labourRequiredSchema.default({}),
@@ -70,7 +85,9 @@ export const updateActivitySchema = z.object({
   trade: z.string().min(1).optional(),
   startDate: isoDate.optional(),
   endDate: isoDate.optional(),
-  isCritical: z.boolean().optional(),
+  parentId: z.string().optional().nullable(),
+  orderIndex: z.number().int().optional(),
+  isMilestone: z.boolean().optional(),
   milestoneType: z.string().optional().nullable(),
   status: z.string().min(1).optional(),
   labourRequired: labourRequiredSchema.optional(),

@@ -7,6 +7,7 @@ import { NotFoundError } from "@/lib/errors";
 import { updateActivitySchema } from "@/lib/validations/project";
 import { assertInList, loadProjectConfig } from "@/lib/projects/config";
 import { syncProjectMilestones } from "@/lib/projects/sync";
+import { recomputeCriticalPath } from "@/lib/schedule/recompute";
 import { sendEvent } from "@/lib/inngest/send-safe";
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string; activityId: string } }) {
@@ -32,6 +33,46 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ error: "End date must be on or after the start date" }, { status: 400 });
     }
 
+    // A task with any dependency must be rescheduled through the
+    // preview-move/commit-move endpoints, which cascade dependent dates and
+    // capture a delay reason when the push is to a later date — a plain
+    // PATCH would silently bypass both.
+    const datesChanging =
+      (body.startDate !== undefined && body.startDate.getTime() !== existing.startDate.getTime()) ||
+      (body.endDate !== undefined && body.endDate.getTime() !== existing.endDate.getTime());
+    if (datesChanging) {
+      const hasDependency = await db.dependency.findFirst({
+        where: { OR: [{ predecessorId: params.activityId }, { successorId: params.activityId }] },
+      });
+      if (hasDependency) {
+        return NextResponse.json(
+          { error: "This task has dependencies — reschedule it via the schedule move endpoint so dependent dates and delay tracking stay in sync." },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (body.parentId !== undefined && body.parentId !== null) {
+      if (body.parentId === params.activityId) {
+        return NextResponse.json({ error: "A task cannot be its own parent" }, { status: 400 });
+      }
+      const parent = await db.programActivity.findFirst({ where: { id: body.parentId, projectId: params.id } });
+      if (!parent) return NextResponse.json({ error: "Parent task not found in this project" }, { status: 400 });
+
+      // Walk the new parent's ancestor chain — re-parenting under one of this
+      // task's own descendants would create a cycle in the hierarchy tree.
+      let cursor: { id: string; parentId: string | null } | null = parent;
+      while (cursor?.parentId) {
+        if (cursor.parentId === params.activityId) {
+          return NextResponse.json({ error: "Cannot move a task under its own descendant" }, { status: 400 });
+        }
+        cursor = await db.programActivity.findFirst({
+          where: { id: cursor.parentId },
+          select: { id: true, parentId: true },
+        });
+      }
+    }
+
     const activity = await db.programActivity.update({
       where: { id: params.activityId },
       data: {
@@ -39,13 +80,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         trade: body.trade,
         startDate: body.startDate,
         endDate: body.endDate,
-        isCritical: body.isCritical,
+        parentId: body.parentId,
+        orderIndex: body.orderIndex,
+        isMilestone: body.isMilestone,
         milestoneType: body.milestoneType,
         status: body.status,
         labourRequired: body.labourRequired,
       },
     });
 
+    await recomputeCriticalPath(db, params.id);
     await syncProjectMilestones(db, session.user.organisationId, params.id);
 
     await auditLog({
@@ -54,8 +98,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       action: "program_activity.update",
       entityType: "ProgramActivity",
       entityId: activity.id,
-      before: { isCritical: existing.isCritical, status: existing.status },
-      after: { isCritical: activity.isCritical, status: activity.status },
+      before: { status: existing.status, startDate: existing.startDate, endDate: existing.endDate },
+      after: { status: activity.status, startDate: activity.startDate, endDate: activity.endDate },
     });
     await sendEvent("forecast/recompute.requested");
 
@@ -76,6 +120,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     if (!existing) throw new NotFoundError("Program activity not found");
 
     await db.programActivity.delete({ where: { id: params.activityId } });
+    await recomputeCriticalPath(db, params.id);
     await syncProjectMilestones(db, session.user.organisationId, params.id);
 
     await auditLog({

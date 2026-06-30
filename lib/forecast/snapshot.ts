@@ -58,7 +58,7 @@ export async function computeForecastResult(organisationId: string, now: Date = 
   const [activities, tenders, workers] = await Promise.all([
     prisma.programActivity.findMany({
       where: { organisationId, endDate: { gte: now } },
-      select: { startDate: true, endDate: true, labourRequired: true },
+      select: { id: true, parentId: true, startDate: true, endDate: true, labourRequired: true },
     }),
     prisma.tender.findMany({
       where: {

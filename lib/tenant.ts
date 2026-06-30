@@ -13,6 +13,7 @@ export const UNSCOPED_MODELS = new Set([
   "generateddocumentversion", // no organisationId of its own — scoped indirectly via its parent GeneratedDocument
   "attendance", // no organisationId of its own — scoped indirectly via its parent DailySiteUpdate
   "taskprogress", // no organisationId of its own — scoped indirectly via its parent DailySiteUpdate
+  "baselinetask", // no organisationId of its own — scoped indirectly via its parent Baseline
 ]);
 
 const WHERE_OPS = new Set([

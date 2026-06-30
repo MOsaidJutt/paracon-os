@@ -33,7 +33,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     const [activities, allocations] = await Promise.all([
       db.programActivity.findMany({
         where: { projectId: params.id, endDate: { gte: now } },
-        select: { startDate: true, endDate: true, labourRequired: true },
+        select: { id: true, parentId: true, startDate: true, endDate: true, labourRequired: true },
       }),
       db.allocation.findMany({
         where: { projectId: params.id, weekStart: { gte: horizonStart, lte: horizonEnd } },

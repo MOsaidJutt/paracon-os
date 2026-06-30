@@ -5,6 +5,7 @@ import { auditLog } from "@/lib/audit";
 import { toErrorResponse } from "@/lib/api-error";
 import { BadRequestError, NotFoundError } from "@/lib/errors";
 import { loadProjectConfig } from "@/lib/projects/config";
+import { recomputeCriticalPath } from "@/lib/schedule/recompute";
 
 /**
  * "Project awarded" path: converts a Won tender into a Project, carrying over
@@ -69,11 +70,11 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
           trade: role,
           startDate,
           endDate,
-          isCritical: false,
           status: config.activityStatusList[0] ?? "On Track",
           labourRequired: { [role]: count },
         })),
       });
+      await recomputeCriticalPath(db, project.id);
     }
 
     await auditLog({

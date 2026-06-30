@@ -71,7 +71,15 @@ export async function getPmDashboard(
           select: { id: true, description: true, severity: true, status: true },
         },
         activities: {
-          select: { id: true, name: true, trade: true, startDate: true, endDate: true, labourRequired: true },
+          select: {
+            id: true,
+            parentId: true,
+            name: true,
+            trade: true,
+            startDate: true,
+            endDate: true,
+            labourRequired: true,
+          },
         },
         allocations: { select: { weekStart: true, worker: { select: { capability: true } } } },
         deliveries: { select: { status: true } },

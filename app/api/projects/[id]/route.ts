@@ -73,6 +73,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         foremanUserId: body.foremanUserId,
         tradePackages: body.tradePackages,
         costBudget: body.costBudget,
+        scheduleColumnsJson: body.scheduleColumnsJson,
       },
       include: {
         client: { select: { id: true, name: true } },

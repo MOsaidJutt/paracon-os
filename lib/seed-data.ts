@@ -312,6 +312,16 @@ export const CONFIG_DEFAULTS = [
     valueJson: ["Direct Employee", "Subcontractor", "Casual"],
   },
   {
+    key: "schedule.delayReasonList",
+    group: "schedule",
+    type: "LIST" as const,
+    label: "Delay reasons",
+    description:
+      "Reason tags required when a Gantt task is pushed to a later date — captured on the DelayRecord " +
+      "for EOT/Notice-of-Delays reporting.",
+    valueJson: ["Material Delay", "Weather", "Sub No Show", "QA Check Failed", "Admin OOO", "Equipment fault"],
+  },
+  {
     key: "worker.statusList",
     group: "labour",
     type: "LIST" as const,

@@ -16,11 +16,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
     const activities = await db.programActivity.findMany({
       where: { projectId: params.id },
-      select: { startDate: true, endDate: true, labourRequired: true },
+      select: { id: true, parentId: true, startDate: true, endDate: true, labourRequired: true },
     });
 
     const demand = aggregateLabourDemand(
       activities.map((a) => ({
+        id: a.id,
+        parentId: a.parentId,
         startDate: a.startDate,
         endDate: a.endDate,
         labourRequired: a.labourRequired as Record<string, number>,

@@ -4,7 +4,7 @@ export type ActivityForMilestone = {
   id: string;
   name: string;
   endDate: Date;
-  isCritical: boolean;
+  isMilestone: boolean;
   milestoneType: string | null;
 };
 
@@ -15,10 +15,10 @@ export type DerivedMilestone = {
   sourceActivityId: string;
 };
 
-/** One milestone per critical activity, dated to that activity's end. Re-derived on every program edit. */
+/** One milestone per activity flagged isMilestone, dated to that activity's end. Re-derived on every program edit. */
 export function deriveMilestones(activities: ActivityForMilestone[]): DerivedMilestone[] {
   return activities
-    .filter((a) => a.isCritical)
+    .filter((a) => a.isMilestone)
     .map((a) => ({
       name: a.milestoneType ? `${a.milestoneType}: ${a.name}` : a.name,
       date: a.endDate,
@@ -36,20 +36,28 @@ export function filterUpcomingMilestones<T extends { date: Date }>(milestones: T
 }
 
 export type ActivityForDemand = {
+  id: string;
+  parentId: string | null;
   startDate: Date;
   endDate: Date;
   labourRequired: Record<string, number>;
 };
 
 /**
- * Sums each activity's per-role weekly headcount (labourRequired) across every
- * week it spans, producing the secured labour demand per role per week that
- * the Phase 5 forecast engine consumes.
+ * Sums each LEAF activity's per-role weekly headcount (labourRequired) across
+ * every week it spans, producing the secured labour demand per role per week
+ * that the Phase 5 forecast engine consumes. Parent/phase rows in the
+ * Scheduling & Gantt task hierarchy are excluded from the sum — their
+ * labourRequired is not meaningful (crew need lives on the leaf tasks), so
+ * including them would double-count against their children.
  */
 export function aggregateLabourDemand(activities: ActivityForDemand[]): Record<string, Record<string, number>> {
+  const parentIds = new Set(activities.map((a) => a.parentId).filter((id): id is string => id !== null));
+  const leaves = activities.filter((a) => !parentIds.has(a.id));
+
   const demand: Record<string, Record<string, number>> = {};
 
-  for (const activity of activities) {
+  for (const activity of leaves) {
     let cursor = startOfIsoWeek(activity.startDate);
     while (cursor <= activity.endDate) {
       const key = weekKey(cursor);

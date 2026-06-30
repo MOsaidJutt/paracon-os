@@ -17,7 +17,7 @@ export async function syncProjectMilestones(
       id: a.id,
       name: a.name,
       endDate: a.endDate,
-      isCritical: a.isCritical,
+      isMilestone: a.isMilestone,
       milestoneType: a.milestoneType,
     }))
   );
