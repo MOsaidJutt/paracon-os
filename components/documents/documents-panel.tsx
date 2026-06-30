@@ -3,13 +3,14 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Eye, ExternalLink, History, Link2, Trash2, UploadCloud, FileText, Image as ImageIcon } from "lucide-react";
+import { Eye, ExternalLink, History, Link2, Trash2, UploadCloud, FileText, Image as ImageIcon, HardDrive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/tenders/format";
 import { UploadDocumentDialog } from "./upload-dialog";
 import { LinkedDocumentDialog } from "./link-dialog";
+import { DriveDialog } from "./drive-dialog";
 import { DocumentPreviewDialog } from "./preview-dialog";
 import { DocumentVersionsDialog } from "./versions-dialog";
 import { formatBytes, targetCategoryList, targetQueryParam, type DocumentConfig, type DocumentRow, type DocumentTarget } from "./types";
@@ -83,6 +84,7 @@ export function DocumentsPanel({ target, canEdit = true }: { target: DocumentTar
   const queryClient = useQueryClient();
   const [uploadOpen, setUploadOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [driveOpen, setDriveOpen] = useState(false);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const [versionsDocId, setVersionsDocId] = useState<string | null>(null);
 
@@ -94,6 +96,18 @@ export function DocumentsPanel({ target, canEdit = true }: { target: DocumentTar
       const res = await fetch("/api/documents/config");
       if (!res.ok) throw new Error("Failed to load document config");
       return (await res.json()) as DocumentConfig;
+    },
+  });
+
+  // Cheap "is Drive connected" check anyone with doc.view can call — distinct
+  // from the admin.settings-only /api/admin/google-drive endpoint, which also
+  // exposes the connected account's email.
+  const { data: driveStatus } = useQuery({
+    queryKey: ["documents", "drive-status"],
+    queryFn: async () => {
+      const res = await fetch("/api/documents/drive/status");
+      if (!res.ok) return { connected: false };
+      return (await res.json()) as { connected: boolean };
     },
   });
 
@@ -149,7 +163,13 @@ export function DocumentsPanel({ target, canEdit = true }: { target: DocumentTar
         <h2 className="text-base font-semibold text-foreground">Documents</h2>
         {canEdit && (
           <div className="flex gap-2">
-            {canLink && (
+            {canLink && driveStatus?.connected && (
+              <Button variant="outline" size="sm" onClick={() => setDriveOpen(true)}>
+                <HardDrive className="size-4" />
+                Google Drive
+              </Button>
+            )}
+            {canLink && !driveStatus?.connected && (
               <Button variant="outline" size="sm" onClick={() => setLinkOpen(true)}>
                 <Link2 className="size-4" />
                 Add Drive link
@@ -207,6 +227,18 @@ export function DocumentsPanel({ target, canEdit = true }: { target: DocumentTar
           onOpenChange={setLinkOpen}
           target={target as Exclude<DocumentTarget, { workerId: string }>}
           kinds={config?.linkedKindList ?? ["Other"]}
+        />
+      )}
+      {canLink && driveStatus?.connected && (
+        <DriveDialog
+          open={driveOpen}
+          onOpenChange={setDriveOpen}
+          target={target as Exclude<DocumentTarget, { workerId: string }>}
+          kinds={config?.linkedKindList ?? ["Other"]}
+          onUseManualLink={() => {
+            setDriveOpen(false);
+            setLinkOpen(true);
+          }}
         />
       )}
       <DocumentPreviewDialog open={!!previewDocId} onOpenChange={(open) => !open && setPreviewDocId(null)} doc={previewDoc} />

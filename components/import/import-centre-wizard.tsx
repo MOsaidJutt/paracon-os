@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, CheckCircle2, Upload } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Download, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -33,6 +33,31 @@ type ZztakeoffPlan =
 
 type ColumnMap = { description: string; quantity: string; unit: string; unitRate?: string; amount?: string; remarks?: string };
 
+type ContactsColumnMap = {
+  name: string;
+  trade?: string;
+  status?: string;
+  address?: string;
+  contactName?: string;
+  email?: string;
+  phone?: string;
+  mobile?: string;
+  comments?: string;
+};
+
+type ContactsPlan =
+  | { stage: "needs-mapping"; headers: string[]; sampleRows: Record<string, unknown>[] }
+  | {
+      stage: "ready";
+      contactType: "client" | "supplier";
+      rows: { rowNumber: number; action: "create" | "update" | "skip"; name: string | null; warnings: string[] }[];
+    };
+
+// Mirrors lib/tenders/import.ts's ImportPlan — only the fields the table below renders.
+type TenderTrackerPlan = {
+  tenders: { rowNumber: number; action: "create" | "update" | "skip"; projectName: string; clientName: string; warnings: string[] }[];
+};
+
 const REQUIRED_ZZTAKEOFF_FIELDS: { key: keyof ColumnMap; label: string; required: boolean }[] = [
   { key: "description", label: "Description", required: true },
   { key: "quantity", label: "Quantity", required: true },
@@ -41,6 +66,44 @@ const REQUIRED_ZZTAKEOFF_FIELDS: { key: keyof ColumnMap; label: string; required
   { key: "amount", label: "Amount", required: false },
   { key: "remarks", label: "Remarks", required: false },
 ];
+
+function contactsFieldsFor(
+  contactType: "client" | "supplier"
+): { key: keyof ContactsColumnMap; label: string; required: boolean }[] {
+  if (contactType === "supplier") {
+    return [
+      { key: "name", label: "Company", required: true },
+      { key: "trade", label: "Trade", required: true },
+      { key: "contactName", label: "Contact name", required: false },
+      { key: "email", label: "Email", required: false },
+      { key: "phone", label: "Phone", required: false },
+      { key: "comments", label: "Comments", required: false },
+    ];
+  }
+  return [
+    { key: "name", label: "Client name", required: true },
+    { key: "status", label: "Status", required: false },
+    { key: "address", label: "Address", required: false },
+    { key: "contactName", label: "Primary contact name", required: false },
+    { key: "email", label: "Email", required: false },
+    { key: "phone", label: "Phone", required: false },
+    { key: "mobile", label: "Mobile", required: false },
+  ];
+}
+
+// Shown before upload so the v9-Tender-Tracker-style "what exactly does this file need to look like" question never has to be answered by guessing from an error message.
+const EXPECTED_STRUCTURE: Record<string, string> = {
+  "tender-tracker":
+    "An .xlsx workbook with 3 sheets, named exactly: \"Tender Register new\", \"Client Directory\", \"Supplier Directory\". Each sheet's first non-blank row is its header row. Required tender columns: Project Name, Status, Client. Required client column: Client. Required supplier columns: Trades, Company.",
+  contacts:
+    "Any .xlsx/.xls/.csv export — columns are mapped to our fields after upload, so there's no fixed header requirement. You'll need at minimum a name/company column (and a trade column if importing suppliers/subcontractors).",
+  "document-bulk-zip":
+    "A .zip export (e.g. from a Dropbox or Google Drive folder). Each file's enclosing folder name or file name should match an existing project or tender name exactly — files that don't match anything are listed as unmatched and skipped, never silently dropped.",
+  zztakeoff:
+    "Any Excel/CSV export with a single header row — columns are mapped to Description/Quantity/Unit/Unit rate/Amount/Remarks after upload, so there's no fixed header requirement.",
+};
+
+const HAS_SAMPLE = new Set(["tender-tracker"]);
 
 function SummaryGrid({ summary }: { summary: unknown }) {
   if (!summary || typeof summary !== "object") return null;
@@ -58,14 +121,21 @@ function SummaryGrid({ summary }: { summary: unknown }) {
   );
 }
 
+function RowActionBadge({ action }: { action: "create" | "update" | "skip" }) {
+  if (action === "skip") return <Badge variant="warning">Skipped</Badge>;
+  return <Badge variant="secondary">{action === "create" ? "New" : "Update"}</Badge>;
+}
+
 export function ImportCentreWizard() {
   const queryClient = useQueryClient();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [stage, setStage] = useState<StageResult | null>(null);
-  const [columnMap, setColumnMap] = useState<Partial<ColumnMap>>({});
+  const [columnMap, setColumnMap] = useState<Partial<ColumnMap & ContactsColumnMap>>({});
   const [targetType, setTargetType] = useState<"project" | "tender">("tender");
   const [targetId, setTargetId] = useState<string>("");
+  const [contactType, setContactType] = useState<"client" | "supplier">("client");
+  const [supplierKind, setSupplierKind] = useState<"Supplier" | "Subcontractor">("Supplier");
   const [report, setReport] = useState<unknown>(null);
 
   const { data: importersData } = useQuery({
@@ -104,7 +174,19 @@ export function ImportCentreWizard() {
     setStage(null);
     setColumnMap({});
     setTargetId("");
+    setContactType("client");
+    setSupplierKind("Supplier");
     setReport(null);
+  }
+
+  function buildExtra(): Record<string, unknown> {
+    if (selectedKey === "zztakeoff") {
+      return { columnMap, ...(targetType === "project" ? { targetProjectId: targetId } : { targetTenderId: targetId }) };
+    }
+    if (selectedKey === "contacts") {
+      return { columnMap, contactType, ...(contactType === "supplier" ? { supplierKind } : {}) };
+    }
+    return {};
   }
 
   const previewMutation = useMutation({
@@ -129,14 +211,10 @@ export function ImportCentreWizard() {
   const refineMutation = useMutation({
     mutationFn: async () => {
       if (!stage || !selectedKey) throw new Error("No staged import");
-      const extra = {
-        columnMap,
-        ...(targetType === "project" ? { targetProjectId: targetId } : { targetTenderId: targetId }),
-      };
       const res = await fetch(`/api/import/${selectedKey}/preview/${stage.importJobId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ extra }),
+        body: JSON.stringify({ extra: buildExtra() }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -153,10 +231,7 @@ export function ImportCentreWizard() {
   const commitMutation = useMutation({
     mutationFn: async () => {
       if (!stage || !selectedKey) throw new Error("No staged import");
-      const extra =
-        selectedKey === "zztakeoff"
-          ? { columnMap, ...(targetType === "project" ? { targetProjectId: targetId } : { targetTenderId: targetId }) }
-          : undefined;
+      const extra = importer?.requiresExtra ? buildExtra() : undefined;
       const res = await fetch(`/api/import/${selectedKey}/commit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -184,13 +259,29 @@ export function ImportCentreWizard() {
     return stage.plan as ZztakeoffPlan;
   }, [selectedKey, stage]);
 
+  const contactsPlan = useMemo(() => {
+    if (selectedKey !== "contacts" || !stage?.plan) return null;
+    return stage.plan as ContactsPlan;
+  }, [selectedKey, stage]);
+
   const zipPlan = useMemo(() => {
     if (selectedKey !== "document-bulk-zip" || !stage?.plan) return null;
     return stage.plan as ZipPlan;
   }, [selectedKey, stage]);
 
-  const needsMapping = zztakeoffPlan?.stage === "needs-mapping";
-  const mappingComplete = !!columnMap.description && !!columnMap.quantity && !!columnMap.unit && !!targetId;
+  const tenderTrackerPlan = useMemo(() => {
+    if (selectedKey !== "tender-tracker" || !stage?.plan) return null;
+    return stage.plan as TenderTrackerPlan;
+  }, [selectedKey, stage]);
+
+  const needsMapping = zztakeoffPlan?.stage === "needs-mapping" || contactsPlan?.stage === "needs-mapping";
+
+  const mappingComplete =
+    selectedKey === "zztakeoff"
+      ? !!columnMap.description && !!columnMap.quantity && !!columnMap.unit && !!targetId
+      : selectedKey === "contacts"
+        ? !!columnMap.name && (contactType !== "supplier" || !!columnMap.trade)
+        : false;
 
   return (
     <div className="flex flex-col gap-6">
@@ -198,7 +289,7 @@ export function ImportCentreWizard() {
         <CardHeader>
           <CardTitle className="text-base">1. Choose an importer</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-3">
+        <CardContent className="grid gap-3 sm:grid-cols-2">
           {importersData?.importers.map((i) => (
             <button
               key={i.key}
@@ -222,7 +313,27 @@ export function ImportCentreWizard() {
       {importer && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">2. Upload</CardTitle>
+            <CardTitle className="text-base">2. Expected file structure</CardTitle>
+            <CardDescription>Check this before uploading — it&apos;s the exact shape this importer expects.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <p className="text-sm text-foreground">{EXPECTED_STRUCTURE[importer.key]}</p>
+            {HAS_SAMPLE.has(importer.key) && (
+              <Button variant="outline" size="sm" className="w-fit" asChild>
+                <a href={`/api/import/${importer.key}/sample`} download>
+                  <Download className="size-4" />
+                  Download a sample file
+                </a>
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {importer && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">3. Upload</CardTitle>
             <CardDescription>Dry-run preview first — nothing is written until you confirm commit.</CardDescription>
           </CardHeader>
           <CardContent className="flex items-center gap-3">
@@ -264,10 +375,10 @@ export function ImportCentreWizard() {
         </Card>
       )}
 
-      {stage && !stage.alreadyImported && needsMapping && zztakeoffPlan?.stage === "needs-mapping" && (
+      {stage && !stage.alreadyImported && needsMapping && selectedKey === "zztakeoff" && zztakeoffPlan?.stage === "needs-mapping" && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">3. Map columns &amp; choose a target</CardTitle>
+            <CardTitle className="text-base">4. Map columns &amp; choose a target</CardTitle>
             <CardDescription>
               We don&apos;t assume fixed headers — map your sheet&apos;s columns and pick the project or tender these
               quantities belong to.
@@ -347,10 +458,89 @@ export function ImportCentreWizard() {
         </Card>
       )}
 
+      {stage && !stage.alreadyImported && needsMapping && selectedKey === "contacts" && contactsPlan?.stage === "needs-mapping" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">4. Choose a type &amp; map columns</CardTitle>
+            <CardDescription>Pick whether this file is clients or suppliers/subcontractors, then map your columns.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="contacts-type">This file is</Label>
+                <Select
+                  value={contactType}
+                  onValueChange={(v) => {
+                    setContactType(v as "client" | "supplier");
+                    setColumnMap({});
+                  }}
+                >
+                  <SelectTrigger id="contacts-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="client">Clients</SelectItem>
+                    <SelectItem value="supplier">Suppliers / Subcontractors</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {contactType === "supplier" && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="contacts-kind">Record as</Label>
+                  <Select value={supplierKind} onValueChange={(v) => setSupplierKind(v as "Supplier" | "Subcontractor")}>
+                    <SelectTrigger id="contacts-kind">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Supplier">Supplier</SelectItem>
+                      <SelectItem value="Subcontractor">Subcontractor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {contactsFieldsFor(contactType).map((field) => (
+                <div key={field.key} className="flex flex-col gap-1.5">
+                  <Label htmlFor={`contacts-column-map-${field.key}`}>
+                    {field.label} {field.required && <span className="text-destructive">*</span>}
+                  </Label>
+                  <Select
+                    value={columnMap[field.key] ?? ""}
+                    onValueChange={(value) => setColumnMap((prev) => ({ ...prev, [field.key]: value }))}
+                  >
+                    <SelectTrigger id={`contacts-column-map-${field.key}`}>
+                      <SelectValue placeholder="Select column" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {contactsPlan.headers.map((h) => (
+                        <SelectItem key={h} value={h}>
+                          {h}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+
+            <Button
+              size="sm"
+              className="w-fit"
+              disabled={!mappingComplete || refineMutation.isPending}
+              onClick={() => refineMutation.mutate()}
+            >
+              {refineMutation.isPending ? "Applying..." : "Apply mapping"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {stage && !stage.alreadyImported && !needsMapping && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">{importer?.requiresExtra ? "4." : "3."} Review &amp; commit</CardTitle>
+            <CardTitle className="text-base">{importer?.requiresExtra ? "5." : "4."} Review &amp; commit</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <SummaryGrid summary={stage.summary} />
@@ -381,6 +571,62 @@ export function ImportCentreWizard() {
                           )}
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">{row.category}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {tenderTrackerPlan && (
+              <div className="max-h-64 overflow-y-auto rounded-md border border-border">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-muted/60 text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium">Row</th>
+                      <th className="px-3 py-2 text-left font-medium">Project</th>
+                      <th className="px-3 py-2 text-left font-medium">Client</th>
+                      <th className="px-3 py-2 text-left font-medium">Action</th>
+                      <th className="px-3 py-2 text-left font-medium">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tenderTrackerPlan.tenders.map((row) => (
+                      <tr key={row.rowNumber} className="border-t border-border">
+                        <td className="px-3 py-2 text-muted-foreground">{row.rowNumber}</td>
+                        <td className="px-3 py-2 text-foreground">{row.projectName}</td>
+                        <td className="px-3 py-2 text-foreground">{row.clientName}</td>
+                        <td className="px-3 py-2">
+                          <RowActionBadge action={row.action} />
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{row.warnings.join(" ")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {contactsPlan?.stage === "ready" && (
+              <div className="max-h-64 overflow-y-auto rounded-md border border-border">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-muted/60 text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium">Row</th>
+                      <th className="px-3 py-2 text-left font-medium">Name</th>
+                      <th className="px-3 py-2 text-left font-medium">Action</th>
+                      <th className="px-3 py-2 text-left font-medium">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {contactsPlan.rows.map((row) => (
+                      <tr key={row.rowNumber} className="border-t border-border">
+                        <td className="px-3 py-2 text-muted-foreground">{row.rowNumber}</td>
+                        <td className="px-3 py-2 text-foreground">{row.name ?? "(blank)"}</td>
+                        <td className="px-3 py-2">
+                          <RowActionBadge action={row.action} />
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{row.warnings.join(" ")}</td>
                       </tr>
                     ))}
                   </tbody>

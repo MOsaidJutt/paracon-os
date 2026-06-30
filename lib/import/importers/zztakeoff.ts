@@ -1,6 +1,6 @@
-import * as XLSXLib from "xlsx";
 import { BadRequestError } from "@/lib/errors";
 import { zztakeoffExtraSchema, type ZztakeoffColumnMap } from "@/lib/validations/import";
+import { readFirstSheet, toNumber, toText } from "../xlsx-helpers";
 import type { Importer } from "../types";
 
 /**
@@ -23,43 +23,6 @@ export type ZztakeoffPlanRow = {
 export type ZztakeoffPlan =
   | { stage: "needs-mapping"; headers: string[]; sampleRows: Record<string, unknown>[] }
   | { stage: "ready"; rows: ZztakeoffPlanRow[] };
-
-function readSheet(buffer: Buffer): { headers: string[]; rows: Record<string, unknown>[] } {
-  const workbook = XLSXLib.read(buffer, { type: "buffer", cellDates: true });
-  const firstSheetName = workbook.SheetNames[0];
-  if (!firstSheetName) throw new BadRequestError("Workbook has no sheets");
-  const sheet = workbook.Sheets[firstSheetName];
-
-  const rawRows = XLSXLib.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null, raw: true });
-  const headerIndex = rawRows.findIndex((row) => row.some((cell) => cell !== null && cell !== ""));
-  if (headerIndex === -1) return { headers: [], rows: [] };
-
-  const headers = rawRows[headerIndex].map((cell) => (cell === null ? "" : String(cell).trim())).filter(Boolean);
-  const rows = rawRows
-    .slice(headerIndex + 1)
-    .filter((row) => row.some((cell) => cell !== null && cell !== ""))
-    .map((row) => {
-      const obj: Record<string, unknown> = {};
-      rawRows[headerIndex].forEach((key, i) => {
-        if (key !== null && key !== "") obj[String(key).trim()] = row[i] ?? null;
-      });
-      return obj;
-    });
-
-  return { headers, rows };
-}
-
-function toNumber(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") return null;
-  const n = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
-function toText(value: unknown): string | null {
-  if (value === null || value === undefined) return null;
-  const s = String(value).trim();
-  return s === "" ? null : s;
-}
 
 export function mapRows(rows: Record<string, unknown>[], columnMap: ZztakeoffColumnMap): ZztakeoffPlanRow[] {
   return rows.map((row, index) => {
@@ -94,7 +57,8 @@ export const zztakeoffImporter: Importer = {
 
   async parsePreview(buffer, _ctx, extra) {
     const parsedExtra = zztakeoffExtraSchema.parse(extra ?? {});
-    const { headers, rows } = readSheet(buffer);
+    const { headers, rows } = readFirstSheet(buffer);
+    if (headers.length === 0) throw new BadRequestError("Workbook has no sheets, or the first sheet is empty");
 
     if (!parsedExtra.columnMap) {
       return {
@@ -130,7 +94,7 @@ export const zztakeoffImporter: Importer = {
       if (!tender) throw new BadRequestError("Target tender not found");
     }
 
-    const { rows } = readSheet(buffer);
+    const { rows } = readFirstSheet(buffer);
     const mapped = mapRows(rows, parsedExtra.columnMap);
     const validRows = mapped.filter((r) => r.description && r.quantity !== null && r.unit);
 

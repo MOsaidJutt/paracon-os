@@ -121,8 +121,10 @@ export async function listDocuments(db: TenantContext, target: DocumentTarget): 
     id: d.id,
     name: d.name,
     category: d.kind,
-    mime: null,
-    size: null,
+    // A manually-pasted link (the original flow) never has these — only rows
+    // created via the live Drive upload/Picker integration do.
+    mime: d.mimeType,
+    size: d.size,
     version: null,
     hasPreview: false,
     tags: [],
@@ -303,6 +305,47 @@ export async function createLinkedDocument(
       name: input.name,
       driveUrl: input.driveUrl,
       kind: input.kind,
+      projectId: input.projectId ?? null,
+      tenderId: input.tenderId ?? null,
+      addedByUserId: userId,
+    },
+  });
+}
+
+/** Registers a LinkedDocument for a file just uploaded to (or picked from) Drive via the live integration — distinct from createLinkedDocument's manual-paste flow, which never has Drive-native metadata. */
+export async function registerDriveLinkedDocument(
+  db: TenantContext,
+  organisationId: string,
+  userId: string,
+  input: {
+    name: string;
+    kind: string;
+    projectId?: string | null;
+    tenderId?: string | null;
+    driveFileId: string;
+    mimeType: string;
+    size: number | null;
+    webViewLink: string;
+    thumbnailLink?: string | null;
+    parentDriveFolderId: string;
+    source: "upload" | "picker";
+  },
+  config: DocumentConfig
+) {
+  assertInList(input.kind, config.linkedKindList, "kind");
+
+  return db.linkedDocument.create({
+    data: {
+      organisationId,
+      name: input.name,
+      driveUrl: input.webViewLink,
+      kind: input.kind,
+      source: input.source,
+      driveFileId: input.driveFileId,
+      mimeType: input.mimeType,
+      size: input.size,
+      thumbnailLink: input.thumbnailLink ?? null,
+      parentDriveFolderId: input.parentDriveFolderId,
       projectId: input.projectId ?? null,
       tenderId: input.tenderId ?? null,
       addedByUserId: userId,

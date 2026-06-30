@@ -2,10 +2,12 @@ import { NotFoundError } from "@/lib/errors";
 import { tenderTrackerImporter } from "./importers/tender-tracker";
 import { documentBulkZipImporter } from "./importers/document-bulk-zip";
 import { zztakeoffImporter } from "./importers/zztakeoff";
+import { contactsImporter } from "./importers/contacts";
 import type { Importer } from "./types";
 
 const IMPORTERS: Record<string, Importer> = {
   [tenderTrackerImporter.key]: tenderTrackerImporter,
+  [contactsImporter.key]: contactsImporter,
   [documentBulkZipImporter.key]: documentBulkZipImporter,
   [zztakeoffImporter.key]: zztakeoffImporter,
 };

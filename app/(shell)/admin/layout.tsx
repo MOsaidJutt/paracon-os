@@ -13,6 +13,7 @@ const TABS = [
   { href: "/admin/audit", label: "Audit Log", permission: "admin.audit" },
   { href: "/admin/settings", label: "Settings", permission: "admin.settings" },
   { href: "/admin/mailbox", label: "Accounts Inbox", permission: "admin.settings" },
+  { href: "/admin/google-drive", label: "Google Drive", permission: "admin.settings" },
   { href: "/admin/billing", label: "Billing", permission: "admin.billing" },
 ];
 

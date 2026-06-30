@@ -28,49 +28,50 @@ model Organisation {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  users               User[]
-  roles               Role[]
-  aiSettings          AiSetting[]
-  aiUsageLogs         AiUsageLog[]
-  organisationModules OrganisationModule[]
-  auditLogs           AuditLog[]
-  invites             Invite[]
-  configs             Config[]
-  clients             Client[]
-  suppliers           Supplier[]
-  prospects           Prospect[]
-  tenders             Tender[]
-  projects            Project[]
-  programActivities   ProgramActivity[]
-  milestones          Milestone[]
-  workers             Worker[]
-  compliance          Compliance[]
-  skills              Skill[]
-  workerLeave         WorkerLeave[]
-  forecastSnapshot    ForecastSnapshot?
-  storedFiles         StoredFile[]
-  linkedDocuments     LinkedDocument[]
-  importJobs          ImportJob[]
-  estimateLineItems   EstimateLineItem[]
-  documentTemplates   DocumentTemplate[]
-  generatedDocuments  GeneratedDocument[]
-  counters            Counter[]
-  purchaseOrders      PurchaseOrder[]
-  deliveries          Delivery[]
-  supplierBills       SupplierBill[]
-  variations          Variation[]
-  progressClaims      ProgressClaim[]
-  retentionReleases   RetentionRelease[]
-  mailboxSetting      MailboxSetting?
-  allocations         Allocation[]
-  dailySiteUpdates    DailySiteUpdate[]
-  issues              Issue[]
-  staffScores         StaffScore[]
-  productivityRecords ProductivityRecord[]
-  dependencies        Dependency[]
-  delayRecords        DelayRecord[]
-  baselines           Baseline[]
-  dashboardLayouts    DashboardLayout[]
+  users                 User[]
+  roles                 Role[]
+  aiSettings            AiSetting[]
+  aiUsageLogs           AiUsageLog[]
+  organisationModules   OrganisationModule[]
+  auditLogs             AuditLog[]
+  invites               Invite[]
+  configs               Config[]
+  clients               Client[]
+  suppliers             Supplier[]
+  prospects             Prospect[]
+  tenders               Tender[]
+  projects              Project[]
+  programActivities     ProgramActivity[]
+  milestones            Milestone[]
+  workers               Worker[]
+  compliance            Compliance[]
+  skills                Skill[]
+  workerLeave           WorkerLeave[]
+  forecastSnapshot      ForecastSnapshot?
+  storedFiles           StoredFile[]
+  linkedDocuments       LinkedDocument[]
+  importJobs            ImportJob[]
+  estimateLineItems     EstimateLineItem[]
+  documentTemplates     DocumentTemplate[]
+  generatedDocuments    GeneratedDocument[]
+  counters              Counter[]
+  purchaseOrders        PurchaseOrder[]
+  deliveries            Delivery[]
+  supplierBills         SupplierBill[]
+  variations            Variation[]
+  progressClaims        ProgressClaim[]
+  retentionReleases     RetentionRelease[]
+  mailboxSetting        MailboxSetting?
+  googleDriveConnection GoogleDriveConnection?
+  allocations           Allocation[]
+  dailySiteUpdates      DailySiteUpdate[]
+  issues                Issue[]
+  staffScores           StaffScore[]
+  productivityRecords   ProductivityRecord[]
+  dependencies          Dependency[]
+  delayRecords          DelayRecord[]
+  baselines             Baseline[]
+  dashboardLayouts      DashboardLayout[]
 }
 
 // ─── Documents & Templates engine ────────────────────────────────────────────
@@ -180,27 +181,28 @@ model User {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  auditLogs                 AuditLog[]
-  sentInvites               Invite[]
-  pmProjects                Project[]           @relation("ProjectPm")
-  storedFiles               StoredFile[]
-  storedFileVersions        StoredFileVersion[]
-  linkedDocuments           LinkedDocument[]
-  importJobs                ImportJob[]
-  generatedDocuments        GeneratedDocument[]
-  purchaseOrdersCreated     PurchaseOrder[]
-  supplierBillDecisions     SupplierBill[]
-  variationDecisions        Variation[]
-  progressClaimDecisions    ProgressClaim[]
-  retentionReleasesRecorded RetentionRelease[]
-  allocationsCreated        Allocation[]
-  foremanProjects           Project[]           @relation("ProjectForeman")
-  dailySiteUpdatesAsForeman DailySiteUpdate[]   @relation("DailySiteUpdateForeman")
-  issuesRaised              Issue[]             @relation("IssueRaisedBy")
-  staffScoresAssessed       StaffScore[]        @relation("StaffScoreAssessedBy")
-  delayRecordsChanged       DelayRecord[]
-  baselinesSaved            Baseline[]
-  dashboardLayouts          DashboardLayout[]
+  auditLogs                       AuditLog[]
+  sentInvites                     Invite[]
+  pmProjects                      Project[]               @relation("ProjectPm")
+  storedFiles                     StoredFile[]
+  storedFileVersions              StoredFileVersion[]
+  linkedDocuments                 LinkedDocument[]
+  importJobs                      ImportJob[]
+  generatedDocuments              GeneratedDocument[]
+  purchaseOrdersCreated           PurchaseOrder[]
+  supplierBillDecisions           SupplierBill[]
+  variationDecisions              Variation[]
+  progressClaimDecisions          ProgressClaim[]
+  retentionReleasesRecorded       RetentionRelease[]
+  allocationsCreated              Allocation[]
+  foremanProjects                 Project[]               @relation("ProjectForeman")
+  dailySiteUpdatesAsForeman       DailySiteUpdate[]       @relation("DailySiteUpdateForeman")
+  issuesRaised                    Issue[]                 @relation("IssueRaisedBy")
+  staffScoresAssessed             StaffScore[]            @relation("StaffScoreAssessedBy")
+  delayRecordsChanged             DelayRecord[]
+  baselinesSaved                  Baseline[]
+  dashboardLayouts                DashboardLayout[]
+  googleDriveConnectionsConnected GoogleDriveConnection[]
 
   @@unique([organisationId, email])
   @@index([roleId])
@@ -487,6 +489,10 @@ model Tender {
   // fixed global enum), defaulted from document.defaultTradePackageList and
   // carried into Project.tradePackages on "Won" conversion (enter once).
   tradePackages         Json?
+  // Cached id of this tender's Drive folder (lazily created on first Drive
+  // upload/link, under the org's GoogleDriveConnection.rootFolderId) — avoids
+  // a Drive API round-trip + folder-search on every subsequent upload.
+  driveFolderId         String?
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
 
@@ -570,6 +576,8 @@ model Project {
   // table) view — shared by anyone who opens the schedule, not per-user, per
   // the Buildpass reference ("saved per schedule"). Null means "use defaults".
   scheduleColumnsJson Json?
+  // Cached id of this project's Drive folder — see Tender.driveFolderId.
+  driveFolderId       String?
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
@@ -1093,23 +1101,66 @@ model StoredFileVersion {
 }
 
 model LinkedDocument {
-  id             String       @id @default(cuid())
-  organisationId String
-  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  name           String
-  driveUrl       String
-  kind           String
-  projectId      String?
-  project        Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tenderId       String?
-  tender         Tender?      @relation(fields: [tenderId], references: [id], onDelete: Cascade)
-  addedByUserId  String?
-  addedBy        User?        @relation(fields: [addedByUserId], references: [id], onDelete: SetNull)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id                  String       @id @default(cuid())
+  organisationId      String
+  organisation        Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  name                String
+  // Drive's webViewLink — opens straight to the file/folder in Drive's own
+  // viewer, no folder-hunting. Still the field name `driveUrl` for backward
+  // compatibility with rows created before the live integration shipped.
+  driveUrl            String
+  kind                String
+  // How this row was created. "manual" (default) = the original pasted-URL
+  // flow, kept as a fallback for links OneParacon's own OAuth grant can't
+  // browse (e.g. a client's external share). "upload" = uploaded to Drive
+  // from inside OneParacon. "picker" = selected from Drive via the Picker
+  // widget without leaving the app.
+  source              String       @default("manual")
+  driveFileId         String?
+  mimeType            String?
+  size                Int?
+  thumbnailLink       String?
+  parentDriveFolderId String?
+  projectId           String?
+  project             Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tenderId            String?
+  tender              Tender?      @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  addedByUserId       String?
+  addedBy             User?        @relation(fields: [addedByUserId], references: [id], onDelete: SetNull)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
   @@index([organisationId, projectId])
   @@index([organisationId, tenderId])
+  @@index([organisationId, driveFileId])
+}
+
+// One Google account connected per org (admin.settings), least-privileged
+// `drive.file` scope only — OneParacon can only see/manage files and folders
+// it creates or that a user explicitly picks via the Picker widget, never the
+// org's whole Drive. refreshTokenEncrypted follows the same AES-256-GCM
+// pattern as AiSetting.apiKeyEncrypted / MailboxSetting.passwordEncrypted
+// (lib/crypto.ts); a short-lived access token is minted on demand and never
+// persisted. This is CLAUDE.md's one deliberate exception to rule 11
+// (SELF-CONTAINED) — large CAD/drawing sets stay in Drive by explicit client
+// instruction; everything else still lives in our own storage.
+model GoogleDriveConnection {
+  id                    String       @id @default(cuid())
+  organisationId        String       @unique
+  organisation          Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  googleAccountEmail    String
+  refreshTokenEncrypted String
+  // The "OneParacon Documents" folder created in the connected account's
+  // Drive on first connect — every project/tender folder is created as a
+  // child of this one, so the integration never touches anything outside a
+  // folder tree it created itself.
+  rootFolderId          String?
+  enabled               Boolean      @default(true)
+  connectedByUserId     String?
+  connectedBy           User?        @relation(fields: [connectedByUserId], references: [id], onDelete: SetNull)
+  lastTestedAt          DateTime?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
 }
 
 // ─── Import Centre ────────────────────────────────────────────────────────────
