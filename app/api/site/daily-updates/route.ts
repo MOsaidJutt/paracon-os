@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       organisationId: session.user.organisationId,
       projectId: body.projectId,
       dailySiteUpdateId: dailyUpdate.id,
-      date: body.date instanceof Date ? body.date.toISOString() : String(body.date),
+      date: body.date,
     });
 
     return NextResponse.json({ dailyUpdate });
