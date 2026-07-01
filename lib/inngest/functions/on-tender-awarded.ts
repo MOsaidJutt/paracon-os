@@ -16,8 +16,7 @@ type TenderAwardedData = { tenderId: string; organisationId: string };
  * 3. Warm the forecast snapshot so dashboards reflect the new project immediately.
  */
 export const onTenderAwarded = inngest.createFunction(
-  { id: "on-tender-awarded" },
-  { event: "tender/awarded" },
+  { id: "on-tender-awarded", triggers: [{ event: "tender/awarded" }] },
   async ({ event, step }) => {
     const { tenderId, organisationId } = event.data as TenderAwardedData;
 

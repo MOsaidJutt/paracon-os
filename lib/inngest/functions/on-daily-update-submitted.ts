@@ -21,8 +21,7 @@ type DailyUpdateSubmittedData = {
  * warming the snapshot is the only cache step required.
  */
 export const onDailyUpdateSubmitted = inngest.createFunction(
-  { id: "on-daily-update-submitted" },
-  { event: "site/daily-update.submitted" },
+  { id: "on-daily-update-submitted", triggers: [{ event: "site/daily-update.submitted" }] },
   async ({ event, step }) => {
     const { organisationId, projectId, dailySiteUpdateId, date } = event.data as DailyUpdateSubmittedData;
 

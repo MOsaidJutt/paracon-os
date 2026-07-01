@@ -16,8 +16,7 @@ type ActivityMovedData = { organisationId: string; projectId: string; activityId
  * 3. If shortages exist: email Director/PM users and write an audit entry.
  */
 export const onActivityMoved = inngest.createFunction(
-  { id: "on-activity-moved" },
-  { event: "schedule/activity.moved" },
+  { id: "on-activity-moved", triggers: [{ event: "schedule/activity.moved" }] },
   async ({ event, step }) => {
     const { organisationId, projectId, activityId } = event.data as ActivityMovedData;
 

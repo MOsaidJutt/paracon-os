@@ -25,8 +25,7 @@ const SENT_TO_EZZYBILLS = "Sent to EzzyBills";
  * exporter handles the actual handoff from that status.
  */
 export const onBillApproved = inngest.createFunction(
-  { id: "on-bill-approved" },
-  { event: "finance/bill.approved" },
+  { id: "on-bill-approved", triggers: [{ event: "finance/bill.approved" }] },
   async ({ event, step }) => {
     const { organisationId, billId, projectId } = event.data as BillApprovedData;
 

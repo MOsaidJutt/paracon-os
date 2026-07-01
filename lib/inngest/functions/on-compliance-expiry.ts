@@ -31,8 +31,7 @@ type ComplianceExpiryAlertData = {
  * is no race window between this async notification and the block taking effect.
  */
 export const onComplianceExpiry = inngest.createFunction(
-  { id: "on-compliance-expiry" },
-  { event: "compliance/expiry.alert" },
+  { id: "on-compliance-expiry", triggers: [{ event: "compliance/expiry.alert" }] },
   async ({ event, step }) => {
     const { organisationId, changes } = event.data as ComplianceExpiryAlertData;
 
