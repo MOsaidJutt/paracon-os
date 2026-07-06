@@ -47,10 +47,32 @@ export type ProgressClaimTemplateConfig = {
   pdfColors: PdfColorTokens;
 };
 
+/**
+ * One reusable hazard/control-measure row for the SWMS hazard-identification
+ * table — a checkable library rather than a fixed enum (same pattern as the
+ * Tender Letter's scope-builder library), so an org can add/retire hazards
+ * from the admin/Projects template screen without a code change.
+ */
+export type SwmsHazardLibraryItem = {
+  id: string;
+  activity: string;
+  hazard: string;
+  riskRating: "Low" | "Medium" | "High";
+  controlMeasures: string;
+  defaultChecked: boolean;
+};
+
+export type SwmsTemplateConfig = {
+  pdfColors: PdfColorTokens;
+  hazardLibrary: SwmsHazardLibraryItem[];
+  ppeLibrary: string[];
+};
+
 export type DocumentTemplateConfigByType = {
   TENDER_LETTER: TenderLetterTemplateConfig;
   VARIATION: VariationTemplateConfig;
   PROGRESS_CLAIM: ProgressClaimTemplateConfig;
+  SWMS: SwmsTemplateConfig;
 };
 
 // Seeded from the real Forever Tender Letter (intake notes §7) — the org's
@@ -83,6 +105,30 @@ export const DEFAULT_TENDER_LETTER_QUALIFICATIONS_LIBRARY: string[] = [
   "Lead times for feature products to be confirmed at the time of order. These suppliers require a deposit, which will be passed on to the builder for payment.",
 ];
 
+// Seeded from a typical General Fitout SWMS — the org's starting hazard
+// library. Fully editable from the Projects > Templates screen; a PM can
+// still add one-off custom hazard lines per SWMS that never touch this
+// shared library, mirroring the Tender Letter's scope-line pattern.
+export const DEFAULT_SWMS_HAZARD_LIBRARY: SwmsHazardLibraryItem[] = [
+  { id: "manual-handling", activity: "General fitout works", hazard: "Manual handling — lifting materials, tools, plant", riskRating: "Medium", controlMeasures: "Team lifts for items over 20kg; mechanical aids (trolleys, hoists) where available; task rotation to limit repetitive strain.", defaultChecked: true },
+  { id: "power-tools", activity: "Fixing & installation", hazard: "Use of power tools (drills, saws, nail guns)", riskRating: "Medium", controlMeasures: "Tools tagged and tested; operators trained/competent; guards fitted and not removed; PPE worn at all times.", defaultChecked: true },
+  { id: "working-at-heights", activity: "Ceiling & high-level works", hazard: "Falls from height (ladders, trestles, EWP)", riskRating: "High", controlMeasures: "Fall prevention/arrest system used above 2m; ladders/trestles inspected before use; EWP operators licensed; exclusion zone below work area.", defaultChecked: true },
+  { id: "dust-silica", activity: "Cutting & sanding", hazard: "Airborne dust / respirable crystalline silica", riskRating: "High", controlMeasures: "Wet cutting or on-tool extraction used; P2 respirators worn; work area ventilated; dust suppression maintained.", defaultChecked: true },
+  { id: "electrical", activity: "Site power & temporary lighting", hazard: "Electric shock from damaged leads/equipment", riskRating: "High", controlMeasures: "RCDs on all circuits; leads/equipment tagged and tested; damaged leads removed from service immediately.", defaultChecked: true },
+  { id: "noise", activity: "Cutting, grinding, hammering", hazard: "Excessive noise exposure", riskRating: "Medium", controlMeasures: "Hearing protection worn in designated zones; noisy tasks scheduled to limit exposure duration; signage at noisy work areas.", defaultChecked: true },
+  { id: "housekeeping", activity: "All works", hazard: "Slips, trips and falls from site debris", riskRating: "Low", controlMeasures: "Work area kept clear of offcuts/leads; waste removed to bins regularly; walkways kept clear.", defaultChecked: true },
+];
+
+export const DEFAULT_SWMS_PPE_LIBRARY: string[] = [
+  "Hard hat",
+  "Hi-vis vest/shirt",
+  "Steel-cap boots",
+  "Safety glasses",
+  "Hearing protection",
+  "Gloves",
+  "P2 dust mask/respirator",
+];
+
 export function defaultDocumentTemplateConfig<T extends keyof DocumentTemplateConfigByType>(
   type: T
 ): DocumentTemplateConfigByType[T] {
@@ -92,6 +138,13 @@ export function defaultDocumentTemplateConfig<T extends keyof DocumentTemplateCo
       scopeLibrary: DEFAULT_TENDER_LETTER_SCOPE_LIBRARY,
       qualificationsLibrary: DEFAULT_TENDER_LETTER_QUALIFICATIONS_LIBRARY,
     } satisfies TenderLetterTemplateConfig as DocumentTemplateConfigByType[T];
+  }
+  if (type === "SWMS") {
+    return {
+      pdfColors: DEFAULT_PDF_COLORS,
+      hazardLibrary: DEFAULT_SWMS_HAZARD_LIBRARY,
+      ppeLibrary: DEFAULT_SWMS_PPE_LIBRARY,
+    } satisfies SwmsTemplateConfig as DocumentTemplateConfigByType[T];
   }
   return { pdfColors: DEFAULT_PDF_COLORS } as DocumentTemplateConfigByType[T];
 }

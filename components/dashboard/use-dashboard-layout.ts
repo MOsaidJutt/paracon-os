@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { resolveLayout, type DashboardKey, type WidgetState } from "@/lib/dashboard/widget-registry";
+import { resolveDashboardLayout, type DashboardKey, type WidgetState } from "@/lib/dashboard/widget-registry";
 
 /**
  * Loads/saves a user's dashboard customisation (order + visibility) against
@@ -26,7 +26,7 @@ export function useDashboardLayout(dashboardKey: DashboardKey) {
     },
   });
 
-  const savedLayout = resolveLayout(dashboardKey, data?.widgets ?? null);
+  const savedLayout = resolveDashboardLayout(dashboardKey, data?.widgets ?? null);
 
   const { mutate: persist, isPending: isSaving } = useMutation({
     mutationFn: async (widgets: WidgetState[]) => {

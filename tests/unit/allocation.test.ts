@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertAllocatable, findDoubleBooking, isComplianceExpired } from "@/lib/labour/allocation";
+import { assertAllocatable, findDoubleBooking, isComplianceExpired, isTradeMismatch } from "@/lib/labour/allocation";
 import { ConflictError } from "@/lib/errors";
 
 const WEEK_1 = new Date("2026-06-22T00:00:00.000Z");
@@ -45,10 +45,27 @@ describe("findDoubleBooking", () => {
   });
 });
 
+describe("isTradeMismatch", () => {
+  it("is false when the worker's capability matches the role", () => {
+    expect(isTradeMismatch("Carpenter", "Carpenter")).toBe(false);
+  });
+
+  it("is true when the worker's capability doesn't match the role", () => {
+    expect(isTradeMismatch("Plumber", "Carpenter")).toBe(true);
+  });
+});
+
 describe("assertAllocatable", () => {
   it("allows an allocation with valid compliance and no clash", () => {
     expect(() =>
-      assertAllocatable({ compliance: [{ type: "White Card", status: "Valid", expiryDate: null }], existing: [], weekStart: WEEK_1, projectId: "proj-1" })
+      assertAllocatable({
+        compliance: [{ type: "White Card", status: "Valid", expiryDate: null }],
+        existing: [],
+        weekStart: WEEK_1,
+        projectId: "proj-1",
+        workerCapability: "Carpenter",
+        role: "Carpenter",
+      })
     ).not.toThrow();
   });
 
@@ -59,6 +76,8 @@ describe("assertAllocatable", () => {
         existing: [],
         weekStart: WEEK_1,
         projectId: "proj-1",
+        workerCapability: "Carpenter",
+        role: "Carpenter",
       })
     ).not.toThrow();
   });
@@ -70,6 +89,8 @@ describe("assertAllocatable", () => {
         existing: [],
         weekStart: WEEK_1,
         projectId: "proj-1",
+        workerCapability: "Carpenter",
+        role: "Carpenter",
       })
     ).toThrow(ConflictError);
   });
@@ -81,6 +102,8 @@ describe("assertAllocatable", () => {
         existing: [{ id: "a1", projectId: "proj-2", weekStart: WEEK_1 }],
         weekStart: WEEK_1,
         projectId: "proj-1",
+        workerCapability: "Carpenter",
+        role: "Carpenter",
       })
     ).toThrow(ConflictError);
   });
@@ -92,6 +115,8 @@ describe("assertAllocatable", () => {
         existing: [{ id: "a1", projectId: "proj-1", weekStart: WEEK_1 }],
         weekStart: WEEK_1,
         projectId: "proj-1",
+        workerCapability: "Carpenter",
+        role: "Carpenter",
       })
     ).toThrow(ConflictError);
   });
@@ -103,6 +128,8 @@ describe("assertAllocatable", () => {
         existing: [{ id: "a1", projectId: "proj-2", weekStart: WEEK_2 }],
         weekStart: WEEK_1,
         projectId: "proj-1",
+        workerCapability: "Carpenter",
+        role: "Carpenter",
       })
     ).not.toThrow();
   });
@@ -114,7 +141,35 @@ describe("assertAllocatable", () => {
         existing: [{ id: "a1", projectId: "proj-2", weekStart: WEEK_1 }],
         weekStart: WEEK_1,
         projectId: "proj-1",
+        workerCapability: "Carpenter",
+        role: "Carpenter",
       })
     ).toThrow(/expired compliance/i);
+  });
+
+  it("blocks an allocation when the worker's trade doesn't match the role, even with clean compliance", () => {
+    expect(() =>
+      assertAllocatable({
+        compliance: [],
+        existing: [],
+        weekStart: WEEK_1,
+        projectId: "proj-1",
+        workerCapability: "Plumber",
+        role: "Carpenter",
+      })
+    ).toThrow(/not a Carpenter/i);
+  });
+
+  it("checks trade before compliance and double-booking", () => {
+    expect(() =>
+      assertAllocatable({
+        compliance: [{ type: "Ticket", status: "Expired", expiryDate: null }],
+        existing: [{ id: "a1", projectId: "proj-2", weekStart: WEEK_1 }],
+        weekStart: WEEK_1,
+        projectId: "proj-1",
+        workerCapability: "Plumber",
+        role: "Carpenter",
+      })
+    ).toThrow(/not a Carpenter/i);
   });
 });

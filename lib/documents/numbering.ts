@@ -38,3 +38,7 @@ export function progressClaimCounterScope(projectId: string): string {
 export function tenderLetterCounterScope(tenderId: string): string {
   return `TENDER_LETTER:${tenderId}`;
 }
+
+export function swmsCounterScope(projectId: string): string {
+  return `SWMS:${projectId}`;
+}

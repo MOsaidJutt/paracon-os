@@ -5,6 +5,7 @@ import { toErrorResponse } from "@/lib/api-error";
 import { NotFoundError } from "@/lib/errors";
 import { previewMoveSchema } from "@/lib/validations/delay";
 import { computeMove, toDownstreamImpacted } from "@/lib/schedule/recalc";
+import { computeCrossProjectImpact } from "@/lib/schedule/cross-project-impact-service";
 import type { DependencyType } from "@/lib/schedule/graph";
 
 /**
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
     const [activities, dependencies] = await Promise.all([
       db.programActivity.findMany({
         where: { projectId: params.id },
-        select: { id: true, name: true, startDate: true, endDate: true },
+        select: { id: true, name: true, trade: true, startDate: true, endDate: true },
       }),
       db.dependency.findMany({
         where: { predecessor: { projectId: params.id } },
@@ -52,8 +53,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
 
     const nameById = new Map(activities.map((a) => [a.id, a.name]));
     const downstreamImpacted = toDownstreamImpacted(changes, params.activityId, nameById);
+    const crossProjectImpact = await computeCrossProjectImpact(db, params.id, activities, changes);
 
-    return NextResponse.json({ requiresReason, changes, downstreamImpacted });
+    return NextResponse.json({ requiresReason, changes, downstreamImpacted, crossProjectImpact });
   } catch (error) {
     return toErrorResponse(error);
   }

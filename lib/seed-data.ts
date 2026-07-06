@@ -552,6 +552,22 @@ export const CONFIG_DEFAULTS = [
     valueJson: 0,
   },
   {
+    key: "document.swms.numberPrefix",
+    group: "document",
+    type: "TEXT" as const,
+    label: "SWMS number prefix",
+    description: 'Prefix for an auto-generated Safe Work Method Statement number (e.g. "SWMS-" produces "SWMS-01"), per-project sequential.',
+    valueJson: "SWMS-",
+  },
+  {
+    key: "document.swms.numberPadding",
+    group: "document",
+    type: "NUMBER" as const,
+    label: "SWMS number padding (digits)",
+    description: 'Zero-pads the SWMS sequence number to this many digits (2 produces "SWMS-01"). 0 disables padding.',
+    valueJson: 2,
+  },
+  {
     key: "finance.po.numberPrefix",
     group: "finance",
     type: "TEXT" as const,

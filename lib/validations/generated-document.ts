@@ -61,10 +61,41 @@ export const generateTenderLetterSchema = z.object({
   signOffName: z.string().min(1).max(200),
 });
 
+export const swmsCustomHazardLineSchema = z.object({
+  activity: z.string().min(1).max(200),
+  hazard: z.string().min(1).max(300),
+  riskRating: z.enum(["Low", "Medium", "High"]),
+  controlMeasures: z.string().min(1).max(1000),
+});
+
+const swmsBaseSchema = z.object({
+  projectId: z.string().min(1),
+  activityDescription: z.string().min(1).max(1000),
+  hazardLibraryItemIds: z.array(z.string()).default([]),
+  customHazardLines: z.array(swmsCustomHazardLineSchema).default([]),
+  ppeItems: z.array(z.string().min(1).max(100)).default([]),
+  signOffName: z.string().min(1).max(200),
+  signOffRole: z.string().min(1).max(200),
+});
+
+function requiresAtLeastOneHazard(data: { hazardLibraryItemIds: string[]; customHazardLines: unknown[] }) {
+  return data.hazardLibraryItemIds.length + data.customHazardLines.length > 0;
+}
+
+export const generateSwmsSchema = swmsBaseSchema.refine(requiresAtLeastOneHazard, {
+  message: "At least one hazard is required",
+  path: ["hazardLibraryItemIds"],
+});
+
 export const regenerateVariationSchema = generateVariationSchema.omit({ projectId: true });
 export const regenerateProgressClaimSchema = generateProgressClaimSchema.omit({ projectId: true });
 export const regenerateTenderLetterSchema = generateTenderLetterSchema.omit({ tenderId: true });
+export const regenerateSwmsSchema = swmsBaseSchema.omit({ projectId: true }).refine(requiresAtLeastOneHazard, {
+  message: "At least one hazard is required",
+  path: ["hazardLibraryItemIds"],
+});
 
 export type GenerateVariationInput = z.infer<typeof generateVariationSchema>;
 export type GenerateProgressClaimInput = z.infer<typeof generateProgressClaimSchema>;
 export type GenerateTenderLetterInput = z.infer<typeof generateTenderLetterSchema>;
+export type GenerateSwmsInput = z.infer<typeof generateSwmsSchema>;

@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { DependencyEditor } from "@/components/schedule/dependency-editor";
 import { DelayHistoryList } from "@/components/schedule/delay-history-list";
+import { AuditTrail } from "@/components/audit/audit-trail";
 import type { ProjectConfig } from "@/lib/projects/config";
 
 export type ActivityRow = {
@@ -451,6 +452,9 @@ export function ActivityFormSheet({
                   <Label>Change history</Label>
                   <DelayHistoryList projectId={projectId} activityId={activity.id} />
                 </div>
+
+                <Separator />
+                <AuditTrail entityType="ProgramActivity" entityId={activity.id} />
               </>
             )}
 

@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rbac";
 import { getTenantContext } from "@/lib/tenant";
 import { toErrorResponse } from "@/lib/api-error";
-import { weekSequence } from "@/lib/dates";
-import { computeWeeklySupply } from "@/lib/forecast/engine";
-import { findTradeConflicts, type ProjectActivities } from "@/lib/schedule/conflicts";
+import { weekKey, weekSequence } from "@/lib/dates";
+import { classifyRag, computeWeeklySupply } from "@/lib/forecast/engine";
+import { loadForecastConfig } from "@/lib/forecast/config";
+import { aggregateCombinedDemand, findTradeConflicts, type ProjectActivities } from "@/lib/schedule/conflicts";
 
 const DAY_MS = 86_400_000;
 
@@ -81,10 +82,28 @@ export async function GET(req: NextRequest) {
 
     const conflicts = findTradeConflicts(activitiesByProject, supply);
 
+    // Combined weekly demand-by-trade across every listed project, RAG-classified
+    // against the same org-wide supply and thresholds the Forecast matrix uses —
+    // the multi-project Gantt's "total labour required" summary strip.
+    const combinedDemand = aggregateCombinedDemand(activitiesByProject);
+    const ragThresholds = (await loadForecastConfig(session.user.organisationId)).ragThresholds;
+    const weekKeys = weeks.map(weekKey);
+    const roles = Array.from(new Set(Object.values(combinedDemand).flatMap((r) => Object.keys(r)))).sort();
+    const demandCells = weekKeys.flatMap((week) =>
+      roles.map((role) => {
+        const demand = combinedDemand[week]?.[role] ?? 0;
+        const roleSupply = supply[week]?.[role] ?? 0;
+        return { week, role, demand, supply: roleSupply, ...classifyRag(demand, roleSupply, ragThresholds) };
+      })
+    );
+
     return NextResponse.json({
       projects: projects.map((p) => ({ id: p.id, name: p.name, code: p.code, status: p.status })),
       activities,
       conflicts,
+      weeks: weekKeys,
+      roles,
+      demandCells,
     });
   } catch (error) {
     return toErrorResponse(error);

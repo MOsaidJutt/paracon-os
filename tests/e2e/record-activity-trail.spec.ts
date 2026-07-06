@@ -59,3 +59,66 @@ test("editing a project shows the change in its own inline Activity section", as
   await expect(page.getByText("project.update")).toBeVisible({ timeout: 15_000 });
   await expect(page).not.toHaveURL(/admin\/audit/);
 });
+
+test("editing a program activity shows the change in its own inline Activity section", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto("/login");
+  await page.getByLabel("Email").fill("director@paracon.com.au");
+  await page.getByLabel("Password").fill("Demo1234!");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.waitForURL("/dashboard");
+
+  await page.goto("/contacts/clients");
+  await page.getByRole("button", { name: "Add client" }).click();
+  await page.getByLabel("Name").fill("E2E Activity Task Client");
+  await page.getByLabel("Status").click();
+  await page.getByRole("option", { name: "Pricing" }).click();
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("E2E Activity Task Client")).toBeVisible({ timeout: 30_000 });
+
+  await page.goto("/projects");
+  await page.getByRole("button", { name: "Add project" }).click();
+  await page.getByLabel("Project name").fill("E2E Activity Task Project");
+  await page.getByLabel("Code").fill("E2E-TASK");
+  await page.getByLabel("Status").click();
+  await page.getByRole("option", { name: "On Track" }).click();
+  await page.getByLabel("Client").click();
+  await page.getByRole("option", { name: "E2E Activity Task Client" }).click();
+  await page.getByLabel("Value ($)").fill("250000");
+  const today = new Date();
+  const start = today.toISOString().slice(0, 10);
+  const end = new Date(today.getTime() + 14 * 86_400_000).toISOString().slice(0, 10);
+  await page.getByLabel("Start date").fill(start);
+  await page.getByLabel("End date").fill(end);
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Project created")).toBeVisible({ timeout: 30_000 });
+
+  await page.getByText("E2E Activity Task Project").click();
+  await page.waitForURL(/\/projects\/.+/);
+  await page.getByRole("tab", { name: "Program" }).click();
+
+  await page.getByRole("button", { name: "Add activity" }).click();
+  await page.getByLabel("Activity name").fill("E2E Task One");
+  await page.getByLabel("Trade").click();
+  await page.getByRole("option").first().click();
+  await page.getByLabel("Status").click();
+  await page.getByRole("option").first().click();
+  await page.getByLabel("Start date").fill(start);
+  await page.getByLabel("End date").fill(end);
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Activity added")).toBeVisible({ timeout: 15_000 });
+
+  // Reopen the same task — its own Activity section shows the creation.
+  await page.getByText("E2E Task One").click();
+  await page.getByRole("button", { name: "Activity" }).click();
+  await expect(page.getByText("program_activity.create")).toBeVisible({ timeout: 15_000 });
+
+  await page.getByLabel("Activity name").fill("E2E Task One Renamed");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Activity updated")).toBeVisible({ timeout: 15_000 });
+
+  await page.getByText("E2E Task One Renamed").click();
+  await page.getByRole("button", { name: "Activity" }).click();
+  await expect(page.getByText("program_activity.update")).toBeVisible({ timeout: 15_000 });
+  await expect(page).not.toHaveURL(/admin\/audit/);
+});

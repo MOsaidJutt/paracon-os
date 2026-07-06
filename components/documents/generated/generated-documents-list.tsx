@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Eye, FileSpreadsheet, FileText, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, FileSpreadsheet, FileText, History, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +26,69 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "dest
 
 function fileUrl(fileId: string): string {
   return `/api/documents/stored/${fileId}/url`;
+}
+
+type GeneratedDocumentVersionRow = {
+  id: string;
+  version: number;
+  pdfFileId: string | null;
+  xlsxFileId: string | null;
+  createdAt: string;
+};
+
+/** Superseded versions of a regenerated document — still downloadable, so a "Regenerate" never silently loses access to what was previously issued. */
+function VersionHistory({ documentId }: { documentId: string }) {
+  const [open, setOpen] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["generated-document-versions", documentId],
+    enabled: open,
+    queryFn: async () => {
+      const res = await fetch(`/api/documents/generated/${documentId}/versions`);
+      if (!res.ok) throw new Error("Failed to load version history");
+      return (await res.json()) as { versions: GeneratedDocumentVersionRow[] };
+    },
+  });
+
+  return (
+    <div className="w-full">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+      >
+        {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+        <History className="size-3" />
+        Version history
+      </button>
+      {open && (
+        <div className="mt-1.5 flex flex-col gap-1 border-l border-border pl-3">
+          {isLoading ? (
+            <p className="text-xs text-muted-foreground">Loading...</p>
+          ) : !data || data.versions.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No prior versions — this is the first issue.</p>
+          ) : (
+            data.versions.map((v) => (
+              <div key={v.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">v{v.version}</span>
+                <span>{formatDate(v.createdAt)}</span>
+                {v.pdfFileId && (
+                  <a href={fileUrl(v.pdfFileId)} target="_blank" rel="noreferrer" className="flex items-center gap-1 underline">
+                    <FileText className="size-3" /> PDF
+                  </a>
+                )}
+                {v.xlsxFileId && (
+                  <a href={fileUrl(v.xlsxFileId)} target="_blank" rel="noreferrer" className="flex items-center gap-1 underline">
+                    <FileSpreadsheet className="size-3" /> Excel
+                  </a>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function asPreviewRow(doc: GeneratedDocumentRow): DocumentRow | null {
@@ -129,74 +192,74 @@ export function GeneratedDocumentsList({
         </CardHeader>
         <CardContent className="flex flex-col gap-1.5">
           {documents.map((doc) => (
-            <div
-              key={doc.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted/40"
-            >
-              <div className="flex min-w-0 flex-1 items-center gap-2">
-                <FileText className="size-4 text-muted-foreground" />
-                <span className="font-medium text-foreground">{doc.number}</span>
-                <Badge variant="outline">{DOCUMENT_TYPE_LABEL[doc.type]}</Badge>
-                {doc.version > 1 && <Badge variant="secondary">v{doc.version}</Badge>}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button type="button" disabled={setStatus.isPending}>
-                      <Badge variant={STATUS_VARIANT[doc.status] ?? "outline"} className="cursor-pointer">
-                        {doc.status}
-                      </Badge>
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start">
-                    {(docConfig?.generatedStatusList ?? []).map((status) => (
-                      <DropdownMenuItem
-                        key={status}
-                        disabled={status === doc.status}
-                        onClick={() => setStatus.mutate({ id: doc.id, status })}
-                      >
-                        Mark as {status}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+            <div key={doc.id} className="flex flex-col gap-1.5 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted/40">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <FileText className="size-4 text-muted-foreground" />
+                  <span className="font-medium text-foreground">{doc.number}</span>
+                  <Badge variant="outline">{DOCUMENT_TYPE_LABEL[doc.type]}</Badge>
+                  {doc.version > 1 && <Badge variant="secondary">v{doc.version}</Badge>}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button type="button" disabled={setStatus.isPending}>
+                        <Badge variant={STATUS_VARIANT[doc.status] ?? "outline"} className="cursor-pointer">
+                          {doc.status}
+                        </Badge>
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      {(docConfig?.generatedStatusList ?? []).map((status) => (
+                        <DropdownMenuItem
+                          key={status}
+                          disabled={status === doc.status}
+                          onClick={() => setStatus.mutate({ id: doc.id, status })}
+                        >
+                          Mark as {status}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
 
-              <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-                {doc.createdBy?.name && <span>{doc.createdBy.name}</span>}
-                <span>{formatDate(doc.createdAt)}</span>
-              </div>
+                <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
+                  {doc.createdBy?.name && <span>{doc.createdBy.name}</span>}
+                  <span>{formatDate(doc.createdAt)}</span>
+                </div>
 
-              <div className="flex shrink-0 items-center gap-1">
-                {doc.pdfFileId && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    title="Preview"
-                    onClick={() => setPreviewDoc(asPreviewRow(doc))}
-                  >
-                    <Eye className="size-4" />
-                  </Button>
-                )}
-                {doc.pdfFileId && (
-                  <Button variant="ghost" size="icon" className="size-8" asChild title="Download PDF">
-                    <a href={fileUrl(doc.pdfFileId)} target="_blank" rel="noreferrer">
-                      <FileText className="size-4" />
-                    </a>
-                  </Button>
-                )}
-                {doc.xlsxFileId && (
-                  <Button variant="ghost" size="icon" className="size-8" asChild title="Download Excel">
-                    <a href={fileUrl(doc.xlsxFileId)} target="_blank" rel="noreferrer">
-                      <FileSpreadsheet className="size-4" />
-                    </a>
-                  </Button>
-                )}
-                {onRegenerate && (
-                  <Button variant="ghost" size="icon" className="size-8" title="Regenerate" onClick={() => onRegenerate(doc)}>
-                    <RefreshCw className="size-4" />
-                  </Button>
-                )}
+                <div className="flex shrink-0 items-center gap-1">
+                  {doc.pdfFileId && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      title="Preview"
+                      onClick={() => setPreviewDoc(asPreviewRow(doc))}
+                    >
+                      <Eye className="size-4" />
+                    </Button>
+                  )}
+                  {doc.pdfFileId && (
+                    <Button variant="ghost" size="icon" className="size-8" asChild title="Download PDF">
+                      <a href={fileUrl(doc.pdfFileId)} target="_blank" rel="noreferrer">
+                        <FileText className="size-4" />
+                      </a>
+                    </Button>
+                  )}
+                  {doc.xlsxFileId && (
+                    <Button variant="ghost" size="icon" className="size-8" asChild title="Download Excel">
+                      <a href={fileUrl(doc.xlsxFileId)} target="_blank" rel="noreferrer">
+                        <FileSpreadsheet className="size-4" />
+                      </a>
+                    </Button>
+                  )}
+                  {onRegenerate && (
+                    <Button variant="ghost" size="icon" className="size-8" title="Regenerate" onClick={() => onRegenerate(doc)}>
+                      <RefreshCw className="size-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
+              {doc.version > 1 && <VersionHistory documentId={doc.id} />}
             </div>
           ))}
         </CardContent>

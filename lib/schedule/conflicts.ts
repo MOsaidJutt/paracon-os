@@ -16,6 +16,27 @@ export type TradeConflict = {
 };
 
 /**
+ * Total labour demand by trade, by week, COMBINED across every supplied
+ * project — the multi-project Gantt's "total labour required" summary strip
+ * (as opposed to `findTradeConflicts` below, which only surfaces the subset
+ * of weeks/trades where that combined demand actually exceeds supply).
+ */
+export function aggregateCombinedDemand(activitiesByProject: Map<string, ProjectActivities>): WeeklyMap {
+  const combined: WeeklyMap = {};
+  for (const [, { activities }] of activitiesByProject) {
+    const demand = aggregateLabourDemand(activities);
+    for (const [week, roles] of Object.entries(demand)) {
+      const bucket = (combined[week] ??= {});
+      for (const [trade, count] of Object.entries(roles)) {
+        if (count <= 0) continue;
+        bucket[trade] = (bucket[trade] ?? 0) + count;
+      }
+    }
+  }
+  return combined;
+}
+
+/**
  * Surfaces the real equivalent of Buildpass's "same worker double-booked
  * across schedules" conflict, reinterpreted for OneParacon's data model:
  * `Allocation` already enforces one worker = one project per ISO week at the

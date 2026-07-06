@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ColumnVisibilityMenu } from "@/components/ui/column-visibility-menu";
+import { useColumnPreferences } from "@/lib/dashboard/use-column-preferences";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/tenders/format";
 import { TenderFormSheet, type TenderRow } from "./tender-form-sheet";
 import type { TenderConfig } from "@/lib/tenders/config";
@@ -18,6 +20,17 @@ type ApiTender = TenderRow & {
   contact: { id: string; name: string } | null;
   project: { id: string; code: string } | null;
 };
+
+const DEFAULT_COLUMNS = [
+  { id: "project", title: "Project" },
+  { id: "client", title: "Client" },
+  { id: "status", title: "Status" },
+  { id: "value", title: "Value" },
+  { id: "winProb", title: "Win Prob" },
+  { id: "due", title: "Due" },
+  { id: "outcome", title: "Outcome" },
+];
+const TITLE_BY_ID = Object.fromEntries(DEFAULT_COLUMNS.map((c) => [c.id, c.title]));
 
 function statusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
   if (status === "Won") return "default";
@@ -30,11 +43,39 @@ function isOverdue(due: string | null, submitted: string | null): boolean {
   return new Date(due) < new Date();
 }
 
+function renderCell(columnId: string, tender: ApiTender, overdue: boolean) {
+  switch (columnId) {
+    case "project":
+      return <span className="font-medium text-foreground">{tender.projectName}</span>;
+    case "client":
+      return <span className="text-muted-foreground">{tender.client.name}</span>;
+    case "status":
+      return <Badge variant={statusVariant(tender.status)}>{tender.status}</Badge>;
+    case "value":
+      return formatCurrency(tender.value);
+    case "winProb":
+      return `${tender.winProbabilityText} (${formatPercent(tender.winProbabilityNumeric)})`;
+    case "due":
+      return (
+        <span className={overdue ? "flex items-center gap-1 text-destructive" : ""}>
+          {overdue && <AlertTriangle className="size-3.5" />}
+          {formatDate(tender.due)}
+        </span>
+      );
+    case "outcome":
+      return <span className="text-muted-foreground">{tender.outcome ?? "—"}</span>;
+    default:
+      return null;
+  }
+}
+
 export function TenderRegisterTable() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("__all__");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingTender, setEditingTender] = useState<TenderRow | null>(null);
+  const { columns, toggleColumn, reorderColumns } = useColumnPreferences("register:tenders", DEFAULT_COLUMNS);
+  const visibleColumns = columns.filter((c) => c.visible);
 
   const { data: config } = useQuery({
     queryKey: ["tenders", "config"],
@@ -89,6 +130,7 @@ export function TenderRegisterTable() {
           </Select>
         </div>
         <div className="flex items-center gap-2">
+          <ColumnVisibilityMenu titleById={TITLE_BY_ID} columns={columns} onToggle={toggleColumn} onReorder={reorderColumns} />
           <Button variant="outline" size="sm" asChild>
             <a href={exportHref}>
               <Download className="size-4" />
@@ -112,19 +154,15 @@ export function TenderRegisterTable() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Project</TableHead>
-              <TableHead>Client</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Value</TableHead>
-              <TableHead>Win Prob</TableHead>
-              <TableHead>Due</TableHead>
-              <TableHead>Outcome</TableHead>
+              {visibleColumns.map((c) => (
+                <TableHead key={c.id}>{TITLE_BY_ID[c.id]}</TableHead>
+              ))}
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={visibleColumns.length} className="text-center text-muted-foreground">
                   Loading...
                 </TableCell>
               </TableRow>
@@ -140,28 +178,15 @@ export function TenderRegisterTable() {
                     setSheetOpen(true);
                   }}
                 >
-                  <TableCell className="font-medium text-foreground">{tender.projectName}</TableCell>
-                  <TableCell className="text-muted-foreground">{tender.client.name}</TableCell>
-                  <TableCell>
-                    <Badge variant={statusVariant(tender.status)}>{tender.status}</Badge>
-                  </TableCell>
-                  <TableCell>{formatCurrency(tender.value)}</TableCell>
-                  <TableCell>
-                    {tender.winProbabilityText} ({formatPercent(tender.winProbabilityNumeric)})
-                  </TableCell>
-                  <TableCell>
-                    <span className={overdue ? "flex items-center gap-1 text-destructive" : ""}>
-                      {overdue && <AlertTriangle className="size-3.5" />}
-                      {formatDate(tender.due)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{tender.outcome ?? "—"}</TableCell>
+                  {visibleColumns.map((c) => (
+                    <TableCell key={c.id}>{renderCell(c.id, tender, overdue)}</TableCell>
+                  ))}
                 </TableRow>
               );
             })}
             {data && data.tenders.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={visibleColumns.length} className="text-center text-muted-foreground">
                   No tenders found.
                 </TableCell>
               </TableRow>

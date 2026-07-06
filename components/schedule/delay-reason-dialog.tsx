@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,6 +25,14 @@ export type DownstreamImpactedRow = {
   newEndDate: string;
 };
 
+export type CrossProjectImpactRow = {
+  workerId: string;
+  workerName: string;
+  otherProjectId: string;
+  otherProjectName: string;
+  conflictWeeks: string[];
+};
+
 export function DelayReasonDialog({
   open,
   onOpenChange,
@@ -32,6 +40,7 @@ export function DelayReasonDialog({
   previousEndDate,
   newEndDate,
   downstreamImpacted,
+  crossProjectImpact,
   reasonOptions,
   onConfirm,
   onCancel,
@@ -43,6 +52,7 @@ export function DelayReasonDialog({
   previousEndDate: string;
   newEndDate: string;
   downstreamImpacted: DownstreamImpactedRow[];
+  crossProjectImpact: CrossProjectImpactRow[];
   reasonOptions: string[];
   onConfirm: (reason: string, note: string) => void;
   onCancel: () => void;
@@ -100,6 +110,25 @@ export function DelayReasonDialog({
                   {downstreamImpacted.map((d) => (
                     <li key={d.activityId}>
                       {d.name}: {formatDate(d.previousEndDate)} → {formatDate(d.newEndDate)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {crossProjectImpact.length > 0 && (
+            <div className="flex items-start gap-2 rounded-lg border border-rag-red/30 bg-rag-red/10 p-3 text-sm text-rag-red">
+              <Users className="mt-0.5 size-4 shrink-0" />
+              <div>
+                <p className="font-medium">
+                  {crossProjectImpact.length} crew conflict{crossProjectImpact.length === 1 ? "" : "s"} on other projects
+                </p>
+                <ul className="mt-1 flex flex-col gap-0.5 text-xs">
+                  {crossProjectImpact.map((c) => (
+                    <li key={`${c.workerId}-${c.otherProjectId}`}>
+                      {c.workerName} is also booked on {c.otherProjectName} for{" "}
+                      {c.conflictWeeks.length} week{c.conflictWeeks.length === 1 ? "" : "s"} this delay now needs them here
                     </li>
                   ))}
                 </ul>

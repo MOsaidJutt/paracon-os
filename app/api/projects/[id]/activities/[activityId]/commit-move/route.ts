@@ -6,6 +6,7 @@ import { toErrorResponse } from "@/lib/api-error";
 import { NotFoundError, BadRequestError } from "@/lib/errors";
 import { commitMoveSchema } from "@/lib/validations/delay";
 import { computeMove, toDownstreamImpacted } from "@/lib/schedule/recalc";
+import { computeCrossProjectImpact } from "@/lib/schedule/cross-project-impact-service";
 import { assertInList, loadScheduleConfig } from "@/lib/schedule/config";
 import { recomputeCriticalPath } from "@/lib/schedule/recompute";
 import { syncProjectMilestones } from "@/lib/projects/sync";
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
     const [activities, dependencies] = await Promise.all([
       db.programActivity.findMany({
         where: { projectId: params.id },
-        select: { id: true, name: true, startDate: true, endDate: true },
+        select: { id: true, name: true, trade: true, startDate: true, endDate: true },
       }),
       db.dependency.findMany({
         where: { predecessor: { projectId: params.id } },
@@ -68,6 +69,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
       newEndDate: body.endDate,
     };
 
+    // Computed outside the transaction (read-only, org-wide Allocation query) —
+    // its result is just frozen into the DelayRecord alongside the cascade.
+    const crossProjectImpact = requiresReason ? await computeCrossProjectImpact(db, params.id, activities, changes) : [];
+
     await db.$transaction(async (tx) => {
       for (const change of changes) {
         await tx.programActivity.update({
@@ -90,7 +95,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
             newEndDate: moved.newEndDate,
             reason: body.reason as string,
             note: body.note ?? null,
-            downstreamImpactedJson: downstreamImpacted,
+            downstreamImpactedJson: { tasks: downstreamImpacted, crossProjectImpact },
             changedByUserId: session.user.id,
           },
         });

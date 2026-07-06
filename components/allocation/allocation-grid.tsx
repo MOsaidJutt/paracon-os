@@ -219,7 +219,7 @@ export function AllocationGrid({ projectId, projectName }: { projectId: string; 
           role={picker.role}
           week={picker.week}
           onPick={(workerId) => {
-            addMutation.mutate({ workerId, weekStart: picker.week });
+            addMutation.mutate({ workerId, weekStart: picker.week, role: picker.role });
             setPicker(null);
           }}
         />

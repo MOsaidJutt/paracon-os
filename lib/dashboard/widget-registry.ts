@@ -32,14 +32,16 @@ export const DASHBOARD_WIDGETS: Record<DashboardKey, DashboardWidgetMeta[]> = {
 export type WidgetState = { id: string; visible: boolean };
 
 /**
- * Merges a saved layout with the registry default: keeps the user's chosen
- * order/visibility for widgets that still exist, appends any newly-added
- * registry widget as visible, and drops ids the registry no longer knows
+ * Merges a saved layout with a registry default: keeps the user's chosen
+ * order/visibility for entries that still exist, appends any newly-added
+ * registry entry as visible, and drops ids the registry no longer knows
  * about. With no saved layout, returns the registry default (all visible,
- * declared order).
+ * declared order). Generic over any {id, title}[] registry — used for
+ * dashboard widgets AND for register-table column preferences
+ * (lib/dashboard/use-column-preferences.ts), which persist through the exact
+ * same DashboardLayout storage and WidgetState shape.
  */
-export function resolveLayout(dashboardKey: DashboardKey, saved: WidgetState[] | null | undefined): WidgetState[] {
-  const registry = DASHBOARD_WIDGETS[dashboardKey];
+export function resolveLayout(registry: DashboardWidgetMeta[], saved: WidgetState[] | null | undefined): WidgetState[] {
   const registryIds = new Set(registry.map((w) => w.id));
 
   if (!saved || saved.length === 0) {
@@ -50,4 +52,9 @@ export function resolveLayout(dashboardKey: DashboardKey, saved: WidgetState[] |
   const knownIds = new Set(known.map((w) => w.id));
   const missing = registry.filter((w) => !knownIds.has(w.id)).map((w) => ({ id: w.id, visible: true }));
   return [...known, ...missing];
+}
+
+/** Convenience wrapper for the two named dashboards, which look their registry up by DashboardKey. */
+export function resolveDashboardLayout(dashboardKey: DashboardKey, saved: WidgetState[] | null | undefined): WidgetState[] {
+  return resolveLayout(DASHBOARD_WIDGETS[dashboardKey], saved);
 }

@@ -1,7 +1,18 @@
 import type { VariationLineItem, VariationTotals } from "./variation-calc";
 import type { ProgressClaimLineResult, ProgressClaimTotals } from "./progress-claim-calc";
 import type { TenderPriceTotals } from "./tender-letter-calc";
-import type { PdfColorTokens, ScopeLibraryItem } from "./templates-config";
+import type { PdfColorTokens, ScopeLibraryItem, SwmsHazardLibraryItem } from "./templates-config";
+
+/**
+ * A project's PM/site manager, auto-filled from Project.pmUserId/foremanUserId
+ * (the "enter once" source per CLAUDE.md rule 12) into every project-scoped
+ * generated document — null when the project hasn't had one assigned yet,
+ * in which case the generation form still accepts a manual override.
+ */
+export type ProjectResponsiblePersons = {
+  pmName: string | null;
+  siteManagerName: string | null;
+};
 
 /** The correct legal entity (CLAUDE.md rule 14) — read from Organisation, never hard-coded in a generator. */
 export type OrgLetterhead = {
@@ -36,7 +47,7 @@ export type VariationSnapshot = {
   signOffPhone: string;
   org: OrgLetterhead;
   colors: PdfColorTokens;
-};
+} & Partial<ProjectResponsiblePersons>;
 
 export type ProgressClaimSnapshot = {
   number: string;
@@ -49,7 +60,25 @@ export type ProgressClaimSnapshot = {
   totals: ProgressClaimTotals;
   org: OrgLetterhead;
   colors: PdfColorTokens;
-};
+} & Partial<ProjectResponsiblePersons>;
+
+export type SwmsHazardLine = Pick<SwmsHazardLibraryItem, "activity" | "hazard" | "riskRating" | "controlMeasures">;
+
+export type SwmsSnapshot = {
+  number: string;
+  version: number;
+  date: string;
+  projectName: string;
+  projectAddress: string;
+  client: string;
+  activityDescription: string;
+  hazardLines: SwmsHazardLine[];
+  ppeItems: string[];
+  signOffName: string;
+  signOffRole: string;
+  org: OrgLetterhead;
+  colors: PdfColorTokens;
+} & ProjectResponsiblePersons;
 
 export type TenderLetterScopeLine = Pick<ScopeLibraryItem, "code" | "label" | "section">;
 

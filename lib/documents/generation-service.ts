@@ -6,6 +6,7 @@ import { putObject } from "@/lib/storage";
 import { formatDate } from "@/lib/tenders/format";
 import type {
   GenerateProgressClaimInput,
+  GenerateSwmsInput,
   GenerateTenderLetterInput,
   GenerateVariationInput,
 } from "@/lib/validations/generated-document";
@@ -14,22 +15,27 @@ import {
   formatDocumentNumber,
   nextCounterValue,
   progressClaimCounterScope,
+  swmsCounterScope,
   tenderLetterCounterScope,
   variationCounterScope,
 } from "./numbering";
 import { calcVariationTotals } from "./variation-calc";
 import { calcProgressClaimLine, calcProgressClaimTotals, type ProgressClaimLineResult } from "./progress-claim-calc";
 import { calcTenderPrice, type MarginFormula, type RoundingBasis } from "./tender-letter-calc";
+import { buildSwmsHazardLines } from "./swms-calc";
 import { loadDocumentTemplateConfig } from "./templates-config";
 import { renderVariationPdf } from "./pdf/variation-pdf";
 import { renderProgressClaimPdf } from "./pdf/progress-claim-pdf";
 import { renderTenderLetterPdf } from "./pdf/tender-letter-pdf";
+import { renderSwmsPdf } from "./pdf/swms-pdf";
 import { buildVariationWorkbook } from "./xlsx/variation-xlsx";
 import { buildProgressClaimWorkbook } from "./xlsx/progress-claim-xlsx";
 import { buildTenderLetterWorkbook } from "./xlsx/tender-letter-xlsx";
 import type {
   OrgLetterhead,
   ProgressClaimSnapshot,
+  ProjectResponsiblePersons,
+  SwmsSnapshot,
   TenderLetterScopeLine,
   TenderLetterSnapshot,
   VariationSnapshot,
@@ -56,6 +62,20 @@ async function loadOrgLetterhead(db: TenantContext, organisationId: string): Pro
     );
   }
   return { legalName: org.legalName, abn: org.abn, registeredAddress: org.registeredAddress, logoUrl: org.logoUrl };
+}
+
+/**
+ * PM/site manager, auto-filled from the project record (CLAUDE.md rule 12 —
+ * enter once) rather than re-typed on every generated document. Null when the
+ * project hasn't had one assigned yet; the generation form still lets the
+ * user override/fill it in manually in that case.
+ */
+async function loadProjectResponsiblePersons(db: TenantContext, projectId: string): Promise<ProjectResponsiblePersons> {
+  const project = await db.project.findFirst({
+    where: { id: projectId },
+    select: { pmUser: { select: { name: true } }, foremanUser: { select: { name: true } } },
+  });
+  return { pmName: project?.pmUser?.name ?? null, siteManagerName: project?.foremanUser?.name ?? null };
 }
 
 async function getNextDocumentNumber(
@@ -125,6 +145,34 @@ async function storeGeneratedFiles(
   return { pdfFileId: pdfFile.id, xlsxFileId: xlsxFile.id };
 }
 
+/** Same as storeGeneratedFiles but for a PDF-only document (e.g. SWMS — a safety document, not a costing one, so no Excel counterpart). */
+async function storeGeneratedPdf(
+  db: TenantContext,
+  organisationId: string,
+  userId: string,
+  target: { projectId?: string; tenderId?: string },
+  category: string,
+  baseName: string,
+  pdfBuffer: Buffer
+): Promise<{ pdfFileId: string }> {
+  const pdfKey = buildDocumentKey(organisationId, target, `${baseName}.pdf`);
+  await putObject(pdfKey, pdfBuffer, "application/pdf");
+  const pdfFile = await db.storedFile.create({
+    data: {
+      organisationId,
+      key: pdfKey,
+      name: `${baseName}.pdf`,
+      mime: "application/pdf",
+      size: pdfBuffer.length,
+      category,
+      projectId: target.projectId ?? null,
+      tenderId: target.tenderId ?? null,
+      uploadedByUserId: userId,
+    },
+  });
+  return { pdfFileId: pdfFile.id };
+}
+
 // ─── Variation ────────────────────────────────────────────────────────────────
 
 async function composeVariationSnapshot(
@@ -134,7 +182,8 @@ async function composeVariationSnapshot(
   projectName: string,
   projectAddress: string,
   number: string,
-  version: number
+  version: number,
+  responsiblePersons: ProjectResponsiblePersons
 ): Promise<VariationSnapshot> {
   const [gstRatePct, validityDays, org, templateConfig] = await Promise.all([
     getConfig<number>("document.gstRatePct", organisationId),
@@ -162,6 +211,7 @@ async function composeVariationSnapshot(
     signOffPhone: input.signOffPhone,
     org,
     colors: templateConfig.pdfColors,
+    ...responsiblePersons,
   };
 }
 
@@ -198,13 +248,25 @@ export async function generateVariation(
   const project = await db.project.findFirst({ where: { id: input.projectId } });
   if (!project) throw new NotFoundError("Project not found");
 
-  const number = await getNextDocumentNumber(
+  const [number, responsiblePersons] = await Promise.all([
+    getNextDocumentNumber(
+      organisationId,
+      variationCounterScope(project.id),
+      "document.variation.numberPrefix",
+      "document.variation.numberPadding"
+    ),
+    loadProjectResponsiblePersons(db, project.id),
+  ]);
+  const snapshot = await composeVariationSnapshot(
+    db,
     organisationId,
-    variationCounterScope(project.id),
-    "document.variation.numberPrefix",
-    "document.variation.numberPadding"
+    input,
+    project.name,
+    project.address ?? "",
+    number,
+    1,
+    responsiblePersons
   );
-  const snapshot = await composeVariationSnapshot(db, organisationId, input, project.name, project.address ?? "", number, 1);
   const { pdfFileId, xlsxFileId } = await renderAndStoreVariation(db, organisationId, userId, project.id, snapshot);
 
   const doc = await db.generatedDocument.create({
@@ -246,6 +308,7 @@ export async function regenerateVariation(
   if (!project) throw new NotFoundError("Project not found");
 
   const nextVersion = existing.version + 1;
+  const responsiblePersons = await loadProjectResponsiblePersons(db, project.id);
   const snapshot = await composeVariationSnapshot(
     db,
     organisationId,
@@ -253,7 +316,8 @@ export async function regenerateVariation(
     project.name,
     project.address ?? "",
     existing.number,
-    nextVersion
+    nextVersion,
+    responsiblePersons
   );
   const { pdfFileId, xlsxFileId } = await renderAndStoreVariation(db, organisationId, userId, project.id, snapshot);
 
@@ -312,6 +376,7 @@ async function composeProgressClaimSnapshot(
   project: { id: string; name: string; address: string | null; tradePackages: unknown },
   number: string,
   version: number,
+  responsiblePersons: ProjectResponsiblePersons,
   excludeDocumentId?: string
 ): Promise<ProgressClaimSnapshot> {
   const tradePackages = (project.tradePackages as { name: string; contractValue: number }[] | null) ?? [];
@@ -363,6 +428,7 @@ async function composeProgressClaimSnapshot(
     totals: calcProgressClaimTotals(contractWorkLines, variationLines, gstRatePct),
     org,
     colors: templateConfig.pdfColors,
+    ...responsiblePersons,
   };
 }
 
@@ -397,13 +463,16 @@ export async function generateProgressClaim(
   const project = await db.project.findFirst({ where: { id: input.projectId } });
   if (!project) throw new NotFoundError("Project not found");
 
-  const number = await getNextDocumentNumber(
-    organisationId,
-    progressClaimCounterScope(project.id),
-    "document.progressClaim.numberPrefix",
-    "document.progressClaim.numberPadding"
-  );
-  const snapshot = await composeProgressClaimSnapshot(db, organisationId, input, project, number, 1);
+  const [number, responsiblePersons] = await Promise.all([
+    getNextDocumentNumber(
+      organisationId,
+      progressClaimCounterScope(project.id),
+      "document.progressClaim.numberPrefix",
+      "document.progressClaim.numberPadding"
+    ),
+    loadProjectResponsiblePersons(db, project.id),
+  ]);
+  const snapshot = await composeProgressClaimSnapshot(db, organisationId, input, project, number, 1, responsiblePersons);
   const { pdfFileId, xlsxFileId } = await renderAndStoreProgressClaim(db, organisationId, userId, project.id, snapshot);
 
   const doc = await db.generatedDocument.create({
@@ -445,6 +514,7 @@ export async function regenerateProgressClaim(
   if (!project) throw new NotFoundError("Project not found");
 
   const nextVersion = existing.version + 1;
+  const responsiblePersons = await loadProjectResponsiblePersons(db, project.id);
   // Excludes this claim itself from "prior claim" so regenerating Claim #2 still carries forward from Claim #1, not from its own previous attempt.
   const snapshot = await composeProgressClaimSnapshot(
     db,
@@ -453,6 +523,7 @@ export async function regenerateProgressClaim(
     project,
     existing.number,
     nextVersion,
+    responsiblePersons,
     existing.id
   );
   const { pdfFileId, xlsxFileId } = await renderAndStoreProgressClaim(db, organisationId, userId, project.id, snapshot);
@@ -670,6 +741,147 @@ export async function regenerateTenderLetter(
   return doc;
 }
 
+// ─── SWMS ─────────────────────────────────────────────────────────────────────
+
+async function composeSwmsSnapshot(
+  db: TenantContext,
+  organisationId: string,
+  input: GenerateSwmsInput,
+  project: { id: string; name: string; address: string | null; client: { name: string } },
+  number: string,
+  version: number,
+  responsiblePersons: ProjectResponsiblePersons
+): Promise<SwmsSnapshot> {
+  const [org, templateConfig] = await Promise.all([
+    loadOrgLetterhead(db, organisationId),
+    loadDocumentTemplateConfig(db, "SWMS"),
+  ]);
+
+  const hazardLines = buildSwmsHazardLines(templateConfig.hazardLibrary, input.hazardLibraryItemIds, input.customHazardLines);
+  const ppeItems = input.ppeItems.length > 0 ? input.ppeItems : templateConfig.ppeLibrary;
+
+  return {
+    number,
+    version,
+    date: formatDate(new Date()),
+    projectName: project.name,
+    projectAddress: project.address ?? "",
+    client: project.client.name,
+    activityDescription: input.activityDescription,
+    hazardLines,
+    ppeItems,
+    signOffName: input.signOffName,
+    signOffRole: input.signOffRole,
+    org,
+    colors: templateConfig.pdfColors,
+    ...responsiblePersons,
+  };
+}
+
+async function renderAndStoreSwms(
+  db: TenantContext,
+  organisationId: string,
+  userId: string,
+  projectId: string,
+  snapshot: SwmsSnapshot
+): Promise<{ pdfFileId: string }> {
+  const pdfBuffer = await renderSwmsPdf(snapshot);
+  const category = await projectDocumentCategory(organisationId);
+  return storeGeneratedPdf(db, organisationId, userId, { projectId }, category, `${snapshot.number} v${snapshot.version} - SWMS`, pdfBuffer);
+}
+
+export async function generateSwms(db: TenantContext, organisationId: string, userId: string, input: GenerateSwmsInput) {
+  const project = await db.project.findFirst({ where: { id: input.projectId }, include: { client: { select: { name: true } } } });
+  if (!project) throw new NotFoundError("Project not found");
+
+  const [number, responsiblePersons] = await Promise.all([
+    getNextDocumentNumber(organisationId, swmsCounterScope(project.id), "document.swms.numberPrefix", "document.swms.numberPadding"),
+    loadProjectResponsiblePersons(db, project.id),
+  ]);
+  const snapshot = await composeSwmsSnapshot(db, organisationId, input, project, number, 1, responsiblePersons);
+  const { pdfFileId } = await renderAndStoreSwms(db, organisationId, userId, project.id, snapshot);
+
+  const doc = await db.generatedDocument.create({
+    data: {
+      organisationId,
+      type: "SWMS",
+      projectId: project.id,
+      number,
+      version: 1,
+      dataSnapshotJson: snapshot,
+      pdfFileId,
+      createdByUserId: userId,
+    },
+  });
+
+  await auditLog({
+    organisationId,
+    userId,
+    action: "document.generate",
+    entityType: "GeneratedDocument",
+    entityId: doc.id,
+    after: { type: "SWMS", number, projectId: project.id },
+  });
+
+  return doc;
+}
+
+export async function regenerateSwms(
+  db: TenantContext,
+  organisationId: string,
+  userId: string,
+  generatedDocumentId: string,
+  input: Omit<GenerateSwmsInput, "projectId">
+) {
+  const existing = await db.generatedDocument.findFirst({ where: { id: generatedDocumentId, type: "SWMS" } });
+  if (!existing || !existing.projectId) throw new NotFoundError("SWMS not found");
+  const project = await db.project.findFirst({
+    where: { id: existing.projectId },
+    include: { client: { select: { name: true } } },
+  });
+  if (!project) throw new NotFoundError("Project not found");
+
+  const nextVersion = existing.version + 1;
+  const responsiblePersons = await loadProjectResponsiblePersons(db, project.id);
+  const snapshot = await composeSwmsSnapshot(
+    db,
+    organisationId,
+    { ...input, projectId: project.id },
+    project,
+    existing.number,
+    nextVersion,
+    responsiblePersons
+  );
+  const { pdfFileId } = await renderAndStoreSwms(db, organisationId, userId, project.id, snapshot);
+
+  await db.generatedDocumentVersion.create({
+    data: {
+      generatedDocumentId: existing.id,
+      version: existing.version,
+      dataSnapshotJson: existing.dataSnapshotJson as object,
+      pdfFileId: existing.pdfFileId,
+      xlsxFileId: existing.xlsxFileId,
+    },
+  });
+
+  const doc = await db.generatedDocument.update({
+    where: { id: existing.id },
+    data: { version: nextVersion, dataSnapshotJson: snapshot, pdfFileId, xlsxFileId: null },
+  });
+
+  await auditLog({
+    organisationId,
+    userId,
+    action: "document.regenerate",
+    entityType: "GeneratedDocument",
+    entityId: doc.id,
+    before: { version: existing.version },
+    after: { version: nextVersion },
+  });
+
+  return doc;
+}
+
 // ─── Listing ───────────────────────────────────────────────────────────────────
 
 export async function listGeneratedDocuments(db: TenantContext, target: { projectId?: string; tenderId?: string }) {
@@ -677,5 +889,16 @@ export async function listGeneratedDocuments(db: TenantContext, target: { projec
     where: target.projectId ? { projectId: target.projectId } : { tenderId: target.tenderId },
     orderBy: { createdAt: "desc" },
     include: { createdBy: { select: { name: true } } },
+  });
+}
+
+/** Every superseded version of one generated document — each row's pdfFileId/xlsxFileId are the archived StoredFile ids from the version that was current at the time, so they're always downloadable through the normal stored-file URL route even after a regenerate. */
+export async function listGeneratedDocumentVersions(db: TenantContext, generatedDocumentId: string) {
+  const existing = await db.generatedDocument.findFirst({ where: { id: generatedDocumentId } });
+  if (!existing) throw new NotFoundError("Generated document not found");
+
+  return db.generatedDocumentVersion.findMany({
+    where: { generatedDocumentId },
+    orderBy: { version: "desc" },
   });
 }

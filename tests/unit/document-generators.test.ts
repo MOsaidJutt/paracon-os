@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import { renderVariationPdf } from "@/lib/documents/pdf/variation-pdf";
 import { renderProgressClaimPdf } from "@/lib/documents/pdf/progress-claim-pdf";
 import { renderTenderLetterPdf } from "@/lib/documents/pdf/tender-letter-pdf";
+import { renderSwmsPdf } from "@/lib/documents/pdf/swms-pdf";
 import { buildVariationWorkbook } from "@/lib/documents/xlsx/variation-xlsx";
 import { buildProgressClaimWorkbook } from "@/lib/documents/xlsx/progress-claim-xlsx";
 import { buildTenderLetterWorkbook } from "@/lib/documents/xlsx/tender-letter-xlsx";
-import { DEFAULT_PDF_COLORS } from "@/lib/documents/templates-config";
-import type { VariationSnapshot, ProgressClaimSnapshot, TenderLetterSnapshot } from "@/lib/documents/types";
+import { buildSwmsHazardLines } from "@/lib/documents/swms-calc";
+import { DEFAULT_PDF_COLORS, DEFAULT_SWMS_HAZARD_LIBRARY, DEFAULT_SWMS_PPE_LIBRARY } from "@/lib/documents/templates-config";
+import type { VariationSnapshot, ProgressClaimSnapshot, TenderLetterSnapshot, SwmsSnapshot } from "@/lib/documents/types";
 
 const ORG = {
   legalName: "Paracon Group Pty Ltd",
@@ -87,6 +89,45 @@ const TENDER_LETTER_SNAPSHOT: TenderLetterSnapshot = {
   colors: DEFAULT_PDF_COLORS,
 };
 
+const SWMS_SNAPSHOT: SwmsSnapshot = {
+  number: "SWMS-01",
+  version: 1,
+  date: "23 Jun 2026",
+  projectName: "Riverside Quarter Fitout",
+  projectAddress: "123 Example St, Melbourne",
+  client: "Meridian Funds Management",
+  pmName: "Priya Manager",
+  siteManagerName: "Frank Foreman",
+  activityDescription: "General fitout works — partition walls, ceiling grid, doors and joinery to Level 2.",
+  hazardLines: buildSwmsHazardLines(DEFAULT_SWMS_HAZARD_LIBRARY, [DEFAULT_SWMS_HAZARD_LIBRARY[0].id], [
+    { activity: "Custom activity", hazard: "Custom hazard", riskRating: "Low", controlMeasures: "Custom control measure" },
+  ]),
+  ppeItems: DEFAULT_SWMS_PPE_LIBRARY,
+  signOffName: "Priya Manager",
+  signOffRole: "Project Manager",
+  org: ORG,
+  colors: DEFAULT_PDF_COLORS,
+};
+
+describe("buildSwmsHazardLines", () => {
+  it("includes only the checked library items, in library order", () => {
+    const lines = buildSwmsHazardLines(DEFAULT_SWMS_HAZARD_LIBRARY, [DEFAULT_SWMS_HAZARD_LIBRARY[1].id], []);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].hazard).toBe(DEFAULT_SWMS_HAZARD_LIBRARY[1].hazard);
+  });
+
+  it("appends custom hazard lines after the checked library items", () => {
+    const custom = { activity: "Custom", hazard: "Custom hazard", riskRating: "High" as const, controlMeasures: "Control" };
+    const lines = buildSwmsHazardLines(DEFAULT_SWMS_HAZARD_LIBRARY, [DEFAULT_SWMS_HAZARD_LIBRARY[0].id], [custom]);
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toEqual(custom);
+  });
+
+  it("returns an empty list when nothing is checked and no custom lines given", () => {
+    expect(buildSwmsHazardLines(DEFAULT_SWMS_HAZARD_LIBRARY, [], [])).toEqual([]);
+  });
+});
+
 describe("PDF generators", () => {
   it("renders a Variation PDF", async () => {
     const buffer = await renderVariationPdf(VARIATION_SNAPSHOT);
@@ -102,6 +143,12 @@ describe("PDF generators", () => {
   it("renders a Tender Letter PDF", async () => {
     const buffer = await renderTenderLetterPdf(TENDER_LETTER_SNAPSHOT);
     expect(buffer.subarray(0, 5).toString()).toBe("%PDF-");
+  });
+
+  it("renders a SWMS PDF", async () => {
+    const buffer = await renderSwmsPdf(SWMS_SNAPSHOT);
+    expect(buffer.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(buffer.length).toBeGreaterThan(500);
   });
 });
 

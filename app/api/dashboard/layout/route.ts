@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     const session = await requireSession();
     const { searchParams } = new URL(req.url);
     const parsedKey = dashboardKeySchema.safeParse(searchParams.get("dashboardKey"));
-    if (!parsedKey.success) throw new BadRequestError("dashboardKey must be 'director' or 'pm'");
+    if (!parsedKey.success) throw new BadRequestError("dashboardKey is required and must be a valid key");
 
     const db = getTenantContext(session.user.organisationId);
     const layout = await db.dashboardLayout.findUnique({

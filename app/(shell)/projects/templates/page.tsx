@@ -9,14 +9,14 @@ export default async function ProjectTemplatesPage() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
-        The PDF colours used to generate Variations and Progress Claims. Branding (logo/colours/fonts) is
-        set once for the whole app on the{" "}
+        The PDF colours used to generate Variations, Progress Claims and SWMS, plus the SWMS hazard/PPE library.
+        Branding (logo/colours/fonts) is set once for the whole app on the{" "}
         <a href="/admin/branding" className="underline">
           Branding
         </a>{" "}
         screen.
       </p>
-      <DocumentTemplatesEditor types={["VARIATION", "PROGRESS_CLAIM"]} />
+      <DocumentTemplatesEditor types={["VARIATION", "PROGRESS_CLAIM", "SWMS"]} />
     </div>
   );
 }

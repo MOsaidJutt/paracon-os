@@ -11,7 +11,7 @@ import { calcOverallScore } from "../lib/scorecard/calc";
 import { deriveTenderComputedFields, loadTenderConfig } from "../lib/tenders/config";
 import { defaultDocumentTemplateConfig } from "../lib/documents/templates-config";
 import { calcRetentionForClaim } from "../lib/finance/retention";
-import type { VariationSnapshot, ProgressClaimSnapshot } from "../lib/documents/types";
+import type { VariationSnapshot, ProgressClaimSnapshot, SwmsSnapshot } from "../lib/documents/types";
 
 const prisma = new PrismaClient();
 
@@ -590,7 +590,7 @@ async function main() {
   // these rows are what the admin Document Templates screen edits; the
   // generators always read from here, never from a hard-coded constant.
   console.log("Seeding Document Templates...");
-  for (const type of ["TENDER_LETTER", "VARIATION", "PROGRESS_CLAIM"] as const) {
+  for (const type of ["TENDER_LETTER", "VARIATION", "PROGRESS_CLAIM", "SWMS"] as const) {
     await prisma.documentTemplate.upsert({
       where: { organisationId_type: { organisationId: org.id, type } },
       update: {},
@@ -1353,6 +1353,46 @@ async function main() {
       issuedAt: daysAgo(10),
     },
   });
+
+  // A SWMS generated through the template engine (no PDF bytes — same
+  // placeholder convention as the Variation/Progress Claim above) — proves
+  // the "enter once" chain end to end: client/PM/site manager below are the
+  // SAME values already on docDemoProject, never re-typed for this document.
+  const swmsConfig = defaultDocumentTemplateConfig("SWMS");
+  const swmsSnapshot: SwmsSnapshot = {
+    number: "SWMS-01",
+    version: 1,
+    date: daysAgo(18).toISOString().slice(0, 10),
+    projectName: docDemoProject.name,
+    projectAddress: docDemoProject.address ?? "",
+    client: "Meridian Funds Management",
+    pmName: pmUser.name,
+    siteManagerName: foremanUser.name,
+    activityDescription: "General fitout works — partition walls, ceiling grid, doors and joinery to Level 2.",
+    hazardLines: swmsConfig.hazardLibrary
+      .filter((h) => h.defaultChecked)
+      .map((h) => ({ activity: h.activity, hazard: h.hazard, riskRating: h.riskRating, controlMeasures: h.controlMeasures })),
+    ppeItems: swmsConfig.ppeLibrary,
+    signOffName: pmUser.name,
+    signOffRole: "Project Manager",
+    org: orgLetterhead,
+    colors: swmsConfig.pdfColors,
+  };
+  const existingSwmsDoc = await prisma.generatedDocument.findFirst({
+    where: { organisationId: org.id, projectId: docDemoProject.id, type: "SWMS", number: "SWMS-01" },
+  });
+  await (existingSwmsDoc
+    ? prisma.generatedDocument.update({ where: { id: existingSwmsDoc.id }, data: { dataSnapshotJson: swmsSnapshot } })
+    : prisma.generatedDocument.create({
+        data: {
+          organisationId: org.id,
+          type: "SWMS",
+          projectId: docDemoProject.id,
+          number: "SWMS-01",
+          version: 1,
+          dataSnapshotJson: swmsSnapshot,
+        },
+      }));
 
   // Phase 11 Productivity & Staff Scorecard demo data — recompute this
   // month's ProductivityRecord from the attendance/program data seeded

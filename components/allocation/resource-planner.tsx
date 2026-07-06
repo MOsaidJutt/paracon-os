@@ -76,7 +76,7 @@ export function ResourcePlanner() {
       return;
     }
 
-    addMutation.mutate({ workerId: worker.id, weekStart: week });
+    addMutation.mutate({ workerId: worker.id, weekStart: week, role });
   }
 
   if (projectsLoading) return <p className="text-sm text-muted-foreground">Loading projects...</p>;

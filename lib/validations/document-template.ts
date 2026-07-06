@@ -30,10 +30,26 @@ export const progressClaimTemplateConfigSchema = z.object({
   pdfColors: pdfColorTokensSchema,
 });
 
+export const swmsHazardLibraryItemSchema = z.object({
+  id: z.string().min(1),
+  activity: z.string().min(1).max(200),
+  hazard: z.string().min(1).max(300),
+  riskRating: z.enum(["Low", "Medium", "High"]),
+  controlMeasures: z.string().min(1).max(1000),
+  defaultChecked: z.boolean(),
+});
+
+export const swmsTemplateConfigSchema = z.object({
+  pdfColors: pdfColorTokensSchema,
+  hazardLibrary: z.array(swmsHazardLibraryItemSchema),
+  ppeLibrary: z.array(z.string().min(1).max(100)),
+});
+
 export const documentTemplateConfigSchemaByType = {
   TENDER_LETTER: tenderLetterTemplateConfigSchema,
   VARIATION: variationTemplateConfigSchema,
   PROGRESS_CLAIM: progressClaimTemplateConfigSchema,
+  SWMS: swmsTemplateConfigSchema,
 } as const;
 
 export type DocumentTemplateTypeParam = keyof typeof documentTemplateConfigSchemaByType;

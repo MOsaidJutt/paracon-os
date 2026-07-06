@@ -4,9 +4,9 @@ import { getTenantContext } from "@/lib/tenant";
 import { toErrorResponse } from "@/lib/api-error";
 import { defaultDocumentTemplateConfig } from "@/lib/documents/templates-config";
 
-const TYPES = ["TENDER_LETTER", "VARIATION", "PROGRESS_CLAIM"] as const;
+const TYPES = ["TENDER_LETTER", "VARIATION", "PROGRESS_CLAIM", "SWMS"] as const;
 
-/** All 3 document templates' generation config (scope-builder library, qualifications boilerplate, PDF colours) — CONFIG NOT CODE, editable here instead of in the generators. Lives in the Tenders/Projects modules' UI now, not Admin — gated by doc.edit (Estimator/PM/Director), not admin.settings. */
+/** All 4 document templates' generation config (scope-builder/hazard libraries, qualifications boilerplate, PDF colours) — CONFIG NOT CODE, editable here instead of in the generators. Lives in the Tenders/Projects modules' UI now, not Admin — gated by doc.edit (Estimator/PM/Director), not admin.settings. */
 export async function GET() {
   try {
     const session = await requirePermission("doc.edit");

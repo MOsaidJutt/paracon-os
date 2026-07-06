@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { GeneratedDocumentsList } from "./generated-documents-list";
 import { VariationFormDialog } from "./variation-form-dialog";
 import { ProgressClaimFormDialog } from "./progress-claim-form-dialog";
+import { SwmsFormDialog } from "./swms-form-dialog";
 import type { GeneratedDocumentRow } from "./types";
 
-/** "Generate document" actions + the generated-documents list for a project's Documents tab — Variation and Progress Claim. */
+/** "Generate document" actions + the generated-documents list for a project's Documents tab — Variation, Progress Claim and SWMS. */
 export function ProjectDocumentActions({ projectId, canGenerate = true }: { projectId: string; canGenerate?: boolean }) {
   const [variationDialog, setVariationDialog] = useState<{ open: boolean; existing: GeneratedDocumentRow | null }>({
     open: false,
@@ -18,10 +19,15 @@ export function ProjectDocumentActions({ projectId, canGenerate = true }: { proj
     open: false,
     existing: null,
   });
+  const [swmsDialog, setSwmsDialog] = useState<{ open: boolean; existing: GeneratedDocumentRow | null }>({
+    open: false,
+    existing: null,
+  });
 
   function handleRegenerate(doc: GeneratedDocumentRow) {
     if (doc.type === "VARIATION") setVariationDialog({ open: true, existing: doc });
     else if (doc.type === "PROGRESS_CLAIM") setClaimDialog({ open: true, existing: doc });
+    else if (doc.type === "SWMS") setSwmsDialog({ open: true, existing: doc });
   }
 
   return (
@@ -35,6 +41,10 @@ export function ProjectDocumentActions({ projectId, canGenerate = true }: { proj
           <Button variant="outline" size="sm" onClick={() => setClaimDialog({ open: true, existing: null })}>
             <FilePlus2 className="size-4" />
             New Progress Claim
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setSwmsDialog({ open: true, existing: null })}>
+            <FilePlus2 className="size-4" />
+            New SWMS
           </Button>
         </div>
       )}
@@ -52,6 +62,12 @@ export function ProjectDocumentActions({ projectId, canGenerate = true }: { proj
         onOpenChange={(open) => setClaimDialog((d) => ({ ...d, open }))}
         projectId={projectId}
         existing={claimDialog.existing}
+      />
+      <SwmsFormDialog
+        open={swmsDialog.open}
+        onOpenChange={(open) => setSwmsDialog((d) => ({ ...d, open }))}
+        projectId={projectId}
+        existing={swmsDialog.existing}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findTradeConflicts, type ProjectActivities } from "@/lib/schedule/conflicts";
+import { aggregateCombinedDemand, findTradeConflicts, type ProjectActivities } from "@/lib/schedule/conflicts";
 import type { WeeklyMap } from "@/lib/forecast/engine";
 
 const BASE = Date.UTC(2026, 0, 5); // Monday, 5 Jan 2026 — a Monday, matching weekKey's ISO-week convention
@@ -121,5 +121,31 @@ describe("findTradeConflicts", () => {
     const conflicts = findTradeConflicts(activitiesByProject, supply);
     expect(conflicts[0].trade).toBe("Carpenter"); // gap 8 > Plumber's gap 2
     expect(conflicts[1].trade).toBe("Plumber");
+  });
+});
+
+describe("aggregateCombinedDemand", () => {
+  it("sums demand for the same trade/week across every supplied project", () => {
+    const activitiesByProject = new Map<string, ProjectActivities>([
+      ["p1", { projectName: "Macquarie PI", activities: [{ id: "a1", parentId: null, startDate: day(0), endDate: day(4), labourRequired: { Carpenter: 3 } }] }],
+      ["p2", { projectName: "Martin PI", activities: [{ id: "a2", parentId: null, startDate: day(0), endDate: day(4), labourRequired: { Carpenter: 2, Plumber: 1 } }] }],
+    ]);
+
+    expect(aggregateCombinedDemand(activitiesByProject)).toEqual({ [WEEK_1]: { Carpenter: 5, Plumber: 1 } });
+  });
+
+  it("includes every trade/week even when no conflict would be raised for it", () => {
+    const activitiesByProject = new Map<string, ProjectActivities>([
+      ["p1", { projectName: "Macquarie PI", activities: [{ id: "a1", parentId: null, startDate: day(0), endDate: day(4), labourRequired: { Carpenter: 1 } }] }],
+    ]);
+
+    // A single project's own demand is never a "conflict" (findTradeConflicts returns nothing for it),
+    // but the combined total-demand view should still show it.
+    expect(findTradeConflicts(activitiesByProject, {})).toHaveLength(0);
+    expect(aggregateCombinedDemand(activitiesByProject)).toEqual({ [WEEK_1]: { Carpenter: 1 } });
+  });
+
+  it("returns an empty map when there is no demand at all", () => {
+    expect(aggregateCombinedDemand(new Map())).toEqual({});
   });
 });

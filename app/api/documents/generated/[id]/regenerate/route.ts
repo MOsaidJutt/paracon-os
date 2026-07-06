@@ -5,11 +5,13 @@ import { toErrorResponse } from "@/lib/api-error";
 import { NotFoundError } from "@/lib/errors";
 import {
   regenerateProgressClaimSchema,
+  regenerateSwmsSchema,
   regenerateTenderLetterSchema,
   regenerateVariationSchema,
 } from "@/lib/validations/generated-document";
 import {
   regenerateProgressClaim,
+  regenerateSwms,
   regenerateTenderLetter,
   regenerateVariation,
 } from "@/lib/documents/generation-service";
@@ -35,13 +37,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
               existing.id,
               regenerateProgressClaimSchema.parse(body)
             )
-          : await regenerateTenderLetter(
-              db,
-              session.user.organisationId,
-              session.user.id,
-              existing.id,
-              regenerateTenderLetterSchema.parse(body)
-            );
+          : existing.type === "SWMS"
+            ? await regenerateSwms(db, session.user.organisationId, session.user.id, existing.id, regenerateSwmsSchema.parse(body))
+            : await regenerateTenderLetter(
+                db,
+                session.user.organisationId,
+                session.user.id,
+                existing.id,
+                regenerateTenderLetterSchema.parse(body)
+              );
 
     return NextResponse.json({ document });
   } catch (error) {

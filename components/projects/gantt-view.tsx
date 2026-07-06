@@ -5,8 +5,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Gantt, ViewMode, type Task } from "gantt-task-react";
 import "gantt-task-react/dist/index.css";
-import { DelayReasonDialog, type DownstreamImpactedRow } from "@/components/schedule/delay-reason-dialog";
+import { DelayReasonDialog, type CrossProjectImpactRow, type DownstreamImpactedRow } from "@/components/schedule/delay-reason-dialog";
 import { GanttViewMenu, type BaselineOption } from "@/components/schedule/gantt-view-menu";
+import { useGanttViewPreferences } from "@/components/schedule/use-gantt-view-preferences";
 
 export type ProgramActivityRow = {
   id: string;
@@ -57,6 +58,7 @@ type PendingMove = {
   newStartDate: string;
   newEndDate: string;
   downstreamImpacted: DownstreamImpactedRow[];
+  crossProjectImpact: CrossProjectImpactRow[];
 };
 
 export function GanttView({
@@ -73,9 +75,11 @@ export function GanttView({
   baselines: BaselineOption[];
 }) {
   const queryClient = useQueryClient();
-  const [showCriticalPath, setShowCriticalPath] = useState(true);
-  const [criticalOnly, setCriticalOnly] = useState(false);
-  const [showBaseline, setShowBaseline] = useState(false);
+  const { preferences: ganttPreferences, update: updateGanttPreferences } = useGanttViewPreferences(projectId);
+  const { showCriticalPath, criticalOnly, showBaseline } = ganttPreferences;
+  const setShowCriticalPath = (value: boolean) => updateGanttPreferences({ showCriticalPath: value });
+  const setCriticalOnly = (value: boolean) => updateGanttPreferences({ criticalOnly: value });
+  const setShowBaseline = (value: boolean) => updateGanttPreferences({ showBaseline: value });
   const [selectedBaselineId, setSelectedBaselineId] = useState<string | null>(baselines[0]?.id ?? null);
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -221,7 +225,11 @@ export function GanttView({
         toast.error(body.error ?? "Failed to preview the move");
         return false;
       }
-      const preview = (await res.json()) as { requiresReason: boolean; downstreamImpacted: DownstreamImpactedRow[] };
+      const preview = (await res.json()) as {
+        requiresReason: boolean;
+        downstreamImpacted: DownstreamImpactedRow[];
+        crossProjectImpact: CrossProjectImpactRow[];
+      };
 
       if (!preview.requiresReason) {
         await commitMove(task.id, task.start.toISOString(), task.end.toISOString());
@@ -235,6 +243,7 @@ export function GanttView({
         newStartDate: task.start.toISOString(),
         newEndDate: task.end.toISOString(),
         downstreamImpacted: preview.downstreamImpacted,
+        crossProjectImpact: preview.crossProjectImpact,
       });
       return false;
     } catch {
@@ -330,6 +339,7 @@ export function GanttView({
           previousEndDate={pendingMove.previousEndDate}
           newEndDate={pendingMove.newEndDate}
           downstreamImpacted={pendingMove.downstreamImpacted}
+          crossProjectImpact={pendingMove.crossProjectImpact}
           reasonOptions={scheduleConfig?.delayReasonList ?? []}
           isSaving={isSaving}
           onCancel={() => setPendingMove(null)}

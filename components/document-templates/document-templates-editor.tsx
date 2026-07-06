@@ -14,18 +14,28 @@ import { Textarea } from "@/components/ui/textarea";
 
 type PdfColors = { ink: string; paper: string; muted: string; accent: string; accentSoft: string };
 type ScopeLibraryItem = { id: string; code: string | null; label: string; section: "Partitions & Doors" | "Ceiling"; defaultChecked: boolean };
+type SwmsHazardLibraryItem = {
+  id: string;
+  activity: string;
+  hazard: string;
+  riskRating: "Low" | "Medium" | "High";
+  controlMeasures: string;
+  defaultChecked: boolean;
+};
 
 type TemplateConfig =
   | { pdfColors: PdfColors; scopeLibrary: ScopeLibraryItem[]; qualificationsLibrary: string[] }
+  | { pdfColors: PdfColors; hazardLibrary: SwmsHazardLibraryItem[]; ppeLibrary: string[] }
   | { pdfColors: PdfColors };
 
-export type DocumentTemplateType = "TENDER_LETTER" | "VARIATION" | "PROGRESS_CLAIM";
+export type DocumentTemplateType = "TENDER_LETTER" | "VARIATION" | "PROGRESS_CLAIM" | "SWMS";
 type TemplateEntry = { type: DocumentTemplateType; configJson: TemplateConfig; isCustomised: boolean };
 
 const TYPE_LABEL: Record<TemplateEntry["type"], string> = {
   TENDER_LETTER: "Tender Letter",
   VARIATION: "Variation",
   PROGRESS_CLAIM: "Progress Claim",
+  SWMS: "SWMS",
 };
 
 function ColorRow({
@@ -172,6 +182,125 @@ function TenderLetterEditor({
   );
 }
 
+function SwmsEditor({
+  config,
+  onChange,
+}: {
+  config: { pdfColors: PdfColors; hazardLibrary: SwmsHazardLibraryItem[]; ppeLibrary: string[] };
+  onChange: (config: { pdfColors: PdfColors; hazardLibrary: SwmsHazardLibraryItem[]; ppeLibrary: string[] }) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <ColorRow idPrefix="swms-color" colors={config.pdfColors} onChange={(pdfColors) => onChange({ ...config, pdfColors })} />
+
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-medium leading-none text-foreground">Hazard library</p>
+        <p className="text-xs text-muted-foreground">
+          Reusable hazard/control-measure rows a PM checks per SWMS. PMs can still add one-off custom hazards per
+          SWMS that never touch this shared library.
+        </p>
+        {config.hazardLibrary.map((item, i) => (
+          <div key={item.id} className="flex flex-col gap-2 rounded-md border border-border p-2">
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={item.defaultChecked}
+                onCheckedChange={(checked) =>
+                  onChange({
+                    ...config,
+                    hazardLibrary: config.hazardLibrary.map((it, idx) => (idx === i ? { ...it, defaultChecked: checked } : it)),
+                  })
+                }
+              />
+              <Input
+                aria-label="Hazard activity"
+                className="flex-1"
+                placeholder="Activity"
+                value={item.activity}
+                onChange={(e) =>
+                  onChange({
+                    ...config,
+                    hazardLibrary: config.hazardLibrary.map((it, idx) => (idx === i ? { ...it, activity: e.target.value } : it)),
+                  })
+                }
+              />
+              <Select
+                value={item.riskRating}
+                onValueChange={(riskRating: SwmsHazardLibraryItem["riskRating"]) =>
+                  onChange({ ...config, hazardLibrary: config.hazardLibrary.map((it, idx) => (idx === i ? { ...it, riskRating } : it)) })
+                }
+              >
+                <SelectTrigger className="w-28">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Low">Low</SelectItem>
+                  <SelectItem value="Medium">Medium</SelectItem>
+                  <SelectItem value="High">High</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 text-destructive"
+                onClick={() => onChange({ ...config, hazardLibrary: config.hazardLibrary.filter((_, idx) => idx !== i) })}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+            <Input
+              aria-label="Hazard description"
+              placeholder="Hazard"
+              value={item.hazard}
+              onChange={(e) =>
+                onChange({ ...config, hazardLibrary: config.hazardLibrary.map((it, idx) => (idx === i ? { ...it, hazard: e.target.value } : it)) })
+              }
+            />
+            <Textarea
+              aria-label="Control measures"
+              placeholder="Control measures"
+              rows={2}
+              value={item.controlMeasures}
+              onChange={(e) =>
+                onChange({
+                  ...config,
+                  hazardLibrary: config.hazardLibrary.map((it, idx) => (idx === i ? { ...it, controlMeasures: e.target.value } : it)),
+                })
+              }
+            />
+          </div>
+        ))}
+        <Button
+          variant="outline"
+          size="sm"
+          className="self-start"
+          onClick={() =>
+            onChange({
+              ...config,
+              hazardLibrary: [
+                ...config.hazardLibrary,
+                { id: crypto.randomUUID(), activity: "", hazard: "", riskRating: "Medium", controlMeasures: "", defaultChecked: false },
+              ],
+            })
+          }
+        >
+          <Plus className="size-4" />
+          Add hazard
+        </Button>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="swms-ppe">PPE library (one per line)</Label>
+        <Textarea
+          id="swms-ppe"
+          rows={4}
+          value={config.ppeLibrary.join("\n")}
+          onChange={(e) => onChange({ ...config, ppeLibrary: e.target.value.split("\n").filter((l) => l.trim()) })}
+        />
+      </div>
+    </div>
+  );
+}
+
 function TemplateCard({ entry }: { entry: TemplateEntry }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<TemplateConfig>(entry.configJson);
@@ -247,6 +376,11 @@ function TemplateCard({ entry }: { entry: TemplateEntry }) {
         {entry.type === "TENDER_LETTER" ? (
           <TenderLetterEditor
             config={draft as { pdfColors: PdfColors; scopeLibrary: ScopeLibraryItem[]; qualificationsLibrary: string[] }}
+            onChange={setDraft}
+          />
+        ) : entry.type === "SWMS" ? (
+          <SwmsEditor
+            config={draft as { pdfColors: PdfColors; hazardLibrary: SwmsHazardLibraryItem[]; ppeLibrary: string[] }}
             onChange={setDraft}
           />
         ) : (

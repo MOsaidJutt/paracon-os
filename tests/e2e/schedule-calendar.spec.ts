@@ -55,11 +55,13 @@ test("director sees a project's tasks on the cross-project schedule calendar and
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("Activity added")).toBeVisible({ timeout: 20_000 });
 
-  // Open the cross-project schedule calendar.
+  // Open the cross-project schedule — defaults to the multi-project Gantt tab,
+  // switch to the Calendar tab for the search/filter assertions below.
   await page.goto("/projects");
   await page.getByRole("link", { name: "Schedule calendar" }).click();
   await page.waitForURL(/\/projects\/schedule/);
-  await expect(page.getByRole("heading", { name: "Schedule Calendar" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Schedule" })).toBeVisible();
+  await page.getByRole("tab", { name: "Calendar" }).click();
 
   // The new task is visible on today's cell, coloured by project by default.
   await expect(page.getByText("Joinery install").first()).toBeVisible({ timeout: 30_000 });

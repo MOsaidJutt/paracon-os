@@ -9,6 +9,7 @@ import { BadRequestError } from "@/lib/errors";
 // privilege (the searchable central log at /admin/audit stays admin-gated).
 const VIEW_PERMISSIONS_BY_ENTITY: Record<string, string[]> = {
   Project: ["project.view"],
+  ProgramActivity: ["project.view"],
   Worker: ["labour.view"],
   Tender: ["tender.view"],
   Client: ["tender.view", "labour.view"],

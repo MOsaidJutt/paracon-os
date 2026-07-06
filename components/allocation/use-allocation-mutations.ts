@@ -13,11 +13,11 @@ export function useAllocationMutations(projectId: string) {
   };
 
   const addMutation = useMutation({
-    mutationFn: async (input: { workerId: string; weekStart: string }) => {
+    mutationFn: async (input: { workerId: string; weekStart: string; role: string }) => {
       const res = await fetch("/api/allocations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workerId: input.workerId, projectId, weekStart: input.weekStart }),
+        body: JSON.stringify({ workerId: input.workerId, projectId, weekStart: input.weekStart, role: input.role }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));

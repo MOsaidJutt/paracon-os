@@ -19,7 +19,10 @@ export async function POST(req: NextRequest) {
     const [worker, project] = await Promise.all([
       db.worker.findFirst({
         where: { id: body.workerId },
-        include: { compliance: { select: { type: true, status: true, expiryDate: true } } },
+        select: {
+          capability: true,
+          compliance: { select: { type: true, status: true, expiryDate: true } },
+        },
       }),
       db.project.findFirst({ where: { id: body.projectId } }),
     ]);
@@ -36,6 +39,8 @@ export async function POST(req: NextRequest) {
       existing: existingAtWeek ? [existingAtWeek] : [],
       weekStart,
       projectId: body.projectId,
+      workerCapability: worker.capability,
+      role: body.role,
     });
 
     let allocation;

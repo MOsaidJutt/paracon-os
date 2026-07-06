@@ -91,6 +91,7 @@ enum DocumentTemplateType {
   TENDER_LETTER
   VARIATION
   PROGRESS_CLAIM
+  SWMS
 }
 
 model DocumentTemplate {
