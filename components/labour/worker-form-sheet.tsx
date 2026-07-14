@@ -24,16 +24,21 @@ import type { LabourConfig } from "@/lib/labour/config";
 export type WorkerRow = {
   id: string;
   name: string;
+  chineseName?: string | null;
+  alias?: string | null;
   phone: string | null;
   capability: string;
   employmentType: string;
   status: string;
   baseLocation: string | null;
+  notes?: string | null;
   isKeyStaff?: boolean;
 };
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
+  chineseName: z.string().optional(),
+  alias: z.string().optional(),
   phone: z.string().optional(),
   capability: z.string().min(1, "Capability is required"),
   employmentType: z.string().min(1, "Employment type is required"),
@@ -46,6 +51,8 @@ type FormValues = z.infer<typeof formSchema>;
 
 const EMPTY_DEFAULTS: FormValues = {
   name: "",
+  chineseName: "",
+  alias: "",
   phone: "",
   capability: "",
   employmentType: "",
@@ -54,9 +61,14 @@ const EMPTY_DEFAULTS: FormValues = {
   isKeyStaff: false,
 };
 
+// Notes are edited on the profile's own Notes card, not here — this form
+// never reads or writes worker.notes, so the two editing surfaces can't
+// race and silently overwrite each other.
 function toFormValues(worker: WorkerRow): FormValues {
   return {
     name: worker.name,
+    chineseName: worker.chineseName ?? "",
+    alias: worker.alias ?? "",
     phone: worker.phone ?? "",
     capability: worker.capability,
     employmentType: worker.employmentType,
@@ -97,6 +109,8 @@ export function WorkerFormSheet({
     mutationFn: async (values: FormValues) => {
       const payload = {
         ...values,
+        chineseName: values.chineseName || null,
+        alias: values.alias || null,
         phone: values.phone || null,
         baseLocation: values.baseLocation || null,
       };
@@ -145,6 +159,33 @@ export function WorkerFormSheet({
                 </FormItem>
               )}
             />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="chineseName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Chinese name (optional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="王小明" {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="alias"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Alias (optional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Also known as..." {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <FormField

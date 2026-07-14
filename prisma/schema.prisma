@@ -446,10 +446,24 @@ model Supplier {
   purchaseOrders PurchaseOrder[]
   deliveries     Delivery[]
   supplierBills  SupplierBill[]
+  performance    SupplierPerformance?
 
   @@unique([organisationId, company, contact])
   @@index([organisationId, trade])
   @@index([organisationId, kind])
+}
+
+// Same four-dimension rating as WorkerPerformance — subcontracting companies
+// get rated the same way individual workers do, not just tracked as a contact.
+model SupplierPerformance {
+  id           String   @id @default(cuid())
+  supplierId   String   @unique
+  supplier     Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  quality      Float    @default(0)
+  reliability  Float    @default(0)
+  productivity Float    @default(0)
+  safety       Float    @default(0)
+  updatedAt    DateTime @updatedAt
 }
 
 model Tender {
@@ -790,12 +804,21 @@ model Worker {
   organisationId String
   organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   name           String
+  // Optional additional name fields — a worker's legal/primary name stays in
+  // `name`; these are purely supplementary so nothing that already reads
+  // `worker.name` needs to change.
+  chineseName    String?
+  alias          String?
   phone          String?
   photoUrl       String?
   capability     String
   employmentType String
   status         String       @default("Available")
   baseLocation   String?
+  // Free-text notes on this worker — visas, preferences, incidents, anything
+  // that doesn't fit a structured field. Single overwritable field, same
+  // pattern as Supplier.comments.
+  notes          String?
   // Decides eligibility for the monthly Staff Scorecard (foremen, lead
   // carpenters, etc.) — set by a Director/PM, not every worker is assessed.
   isKeyStaff     Boolean      @default(false)

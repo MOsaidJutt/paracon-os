@@ -17,10 +17,14 @@ import { SkillEditor } from "./skill-editor";
 import { ComplianceBadge } from "./compliance-badge";
 import { AvailabilityCalendar } from "./availability-calendar";
 import { WorkerAllocations } from "./worker-allocations";
+import { WorkerNotesCard } from "./worker-notes-card";
 import { AuditTrail } from "@/components/audit/audit-trail";
 
 type ApiWorker = WorkerRow & {
   photoUrl: string | null;
+  chineseName: string | null;
+  alias: string | null;
+  notes: string | null;
   performance: PerformanceScores | null;
   compliance: ComplianceRow[];
   skills: { skillId: string; level: number; skill: { id: string; name: string } }[];
@@ -76,6 +80,13 @@ export function WorkerProfile({ workerId }: { workerId: string }) {
               <ComplianceBadge status={worstCompliance} expiryDate={null} />
               {worker.isKeyStaff && <Badge variant="outline">Key staff</Badge>}
             </div>
+            {(worker.chineseName || worker.alias) && (
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {worker.chineseName}
+                {worker.chineseName && worker.alias ? " · " : ""}
+                {worker.alias ? `"${worker.alias}"` : ""}
+              </p>
+            )}
             <p className="mt-1 text-sm text-muted-foreground">
               {worker.capability} &middot; {worker.employmentType}
               {worker.baseLocation ? ` · ${worker.baseLocation}` : ""}
@@ -138,13 +149,15 @@ export function WorkerProfile({ workerId }: { workerId: string }) {
                 </CardHeader>
                 <CardContent>
                   <PerformanceEditor
-                    workerId={worker.id}
+                    endpoint={`/api/workers/${worker.id}/performance`}
                     initial={worker.performance ?? { quality: 0, reliability: 0, productivity: 0, safety: 0 }}
                   />
                 </CardContent>
               </Card>
             </>
           )}
+
+          <WorkerNotesCard workerId={worker.id} notes={worker.notes} />
 
           <div className="sm:col-span-2">
             <AuditTrail entityType="Worker" entityId={worker.id} />

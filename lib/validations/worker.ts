@@ -4,21 +4,27 @@ const isoDate = z.coerce.date();
 
 export const createWorkerSchema = z.object({
   name: z.string().min(1, "Name is required").max(200),
+  chineseName: z.string().max(200).optional().nullable(),
+  alias: z.string().max(200).optional().nullable(),
   phone: z.string().max(40).optional().nullable(),
   capability: z.string().min(1, "Capability is required"),
   employmentType: z.string().min(1, "Employment type is required"),
   status: z.string().min(1).optional(),
   baseLocation: z.string().max(200).optional().nullable(),
+  notes: z.string().max(4000).optional().nullable(),
   isKeyStaff: z.boolean().optional(),
 });
 
 export const updateWorkerSchema = z.object({
   name: z.string().min(1).max(200).optional(),
+  chineseName: z.string().max(200).optional().nullable(),
+  alias: z.string().max(200).optional().nullable(),
   phone: z.string().max(40).optional().nullable(),
   capability: z.string().min(1).optional(),
   employmentType: z.string().min(1).optional(),
   status: z.string().min(1).optional(),
   baseLocation: z.string().max(200).optional().nullable(),
+  notes: z.string().max(4000).optional().nullable(),
   isKeyStaff: z.boolean().optional(),
 });
 
@@ -73,6 +79,10 @@ export const createSkillSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
 });
 
+export const updateSkillSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100),
+});
+
 export const createLeaveSchema = z
   .object({
     startDate: isoDate,
@@ -90,6 +100,7 @@ export type ListWorkersQuery = z.infer<typeof listWorkersQuerySchema>;
 export type UpdatePerformanceInput = z.infer<typeof updatePerformanceSchema>;
 export type CreateComplianceInput = z.infer<typeof createComplianceSchema>;
 export type UpdateComplianceInput = z.infer<typeof updateComplianceSchema>;
+export type UpdateSkillInput = z.infer<typeof updateSkillSchema>;
 export type UpsertWorkerSkillsInput = z.infer<typeof upsertWorkerSkillsSchema>;
 export type CreateSkillInput = z.infer<typeof createSkillSchema>;
 export type CreateLeaveInput = z.infer<typeof createLeaveSchema>;

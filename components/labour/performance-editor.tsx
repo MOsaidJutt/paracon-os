@@ -15,13 +15,22 @@ const METRICS: { key: keyof PerformanceScores; label: string }[] = [
   { key: "safety", label: "Safety" },
 ];
 
-export function PerformanceEditor({ workerId, initial }: { workerId: string; initial: PerformanceScores }) {
+export function PerformanceEditor({
+  endpoint,
+  initial,
+  invalidateKey = ["labour"],
+}: {
+  /** e.g. `/api/workers/${id}/performance` or `/api/suppliers/${id}/performance` */
+  endpoint: string;
+  initial: PerformanceScores;
+  invalidateKey?: string[];
+}) {
   const queryClient = useQueryClient();
   const [scores, setScores] = useState<PerformanceScores>(initial);
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/workers/${workerId}/performance`, {
+      const res = await fetch(endpoint, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(scores),
@@ -33,8 +42,8 @@ export function PerformanceEditor({ workerId, initial }: { workerId: string; ini
       return res.json();
     },
     onSuccess: () => {
-      toast.success("Performance updated");
-      queryClient.invalidateQueries({ queryKey: ["labour"] });
+      toast.success("Rating updated");
+      queryClient.invalidateQueries({ queryKey: invalidateKey });
     },
     onError: (error: Error) => toast.error(error.message),
   });

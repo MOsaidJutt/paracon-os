@@ -21,6 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { AuditTrail } from "@/components/audit/audit-trail";
+import { PerformanceRadar, type PerformanceScores } from "@/components/labour/performance-radar";
+import { PerformanceEditor } from "@/components/labour/performance-editor";
 import type { SupplierConfig } from "@/lib/suppliers/config";
 
 export type SupplierRow = {
@@ -32,6 +34,7 @@ export type SupplierRow = {
   phone: string | null;
   comments: string | null;
   kind: string;
+  performance?: PerformanceScores | null;
 };
 
 const formSchema = z.object({
@@ -226,6 +229,22 @@ export function SupplierFormDialog({
 
             {isEdit && (
               <>
+                <Separator />
+                <div>
+                  <p className="mb-2 text-sm font-medium text-foreground">
+                    {supplier!.kind === "Subcontractor" ? "Subcontractor rating" : "Supplier rating"}
+                  </p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <PerformanceRadar
+                      scores={supplier!.performance ?? { quality: 0, reliability: 0, productivity: 0, safety: 0 }}
+                    />
+                    <PerformanceEditor
+                      endpoint={`/api/suppliers/${supplier!.id}/performance`}
+                      initial={supplier!.performance ?? { quality: 0, reliability: 0, productivity: 0, safety: 0 }}
+                      invalidateKey={["suppliers"]}
+                    />
+                  </div>
+                </div>
                 <Separator />
                 <AuditTrail entityType="Supplier" entityId={supplier!.id} />
               </>

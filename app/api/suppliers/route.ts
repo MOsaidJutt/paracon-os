@@ -12,7 +12,10 @@ export async function GET() {
     const session = await requireAnyPermission(["tender.view", "finance.view"]);
     const db = getTenantContext(session.user.organisationId);
 
-    const suppliers = await db.supplier.findMany({ orderBy: [{ trade: "asc" }, { company: "asc" }] });
+    const suppliers = await db.supplier.findMany({
+      include: { performance: true },
+      orderBy: [{ trade: "asc" }, { company: "asc" }],
+    });
 
     return NextResponse.json({ suppliers });
   } catch (error) {
