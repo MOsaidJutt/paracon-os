@@ -139,4 +139,13 @@ describe("preference registry", () => {
     expect(parsePreference("prospects.view", "KANBAN")).toBe("BOARD");
     expect(parsePreference("prospects.view", null)).toBe("BOARD");
   });
+
+  it("defaults Pre-Construction to the register, not the intelligence dashboard", () => {
+    expect(PREFERENCE_DEFAULTS["preconstruction.view"]).toBe("REGISTER");
+  });
+
+  it("keeps a stored Pre-Construction view choice and falls back on garbage", () => {
+    expect(parsePreference("preconstruction.view", "INTEL")).toBe("INTEL");
+    expect(parsePreference("preconstruction.view", "CHART")).toBe("REGISTER");
+  });
 });

@@ -6,6 +6,7 @@ import {
   writeZztakeoffFixture,
 } from "./helpers/fixtures";
 import { createE2EProject, createE2ETender } from "./helpers/entities";
+import { usePreference } from "./helpers/view-mode";
 
 // Requires the database to be seeded (npm run db:seed), the dev server running,
 // and `npm run dev:storage` reachable — every importer stages its upload in
@@ -42,8 +43,10 @@ test("tender-tracker import: preview, commit, then a repeat run is an idempotent
     await expect(page.getByText("Import committed")).toBeVisible();
     await expect(page.getByText("Import report")).toBeVisible();
 
-    // The tender + client really landed in the register, not just a fake report.
+    // The tender + client really landed in the register, not just a fake
+    // report. /tenders now branches on view mode; force the register tab.
     await page.goto("/tenders");
+    await usePreference(page, "preconstruction.view", "REGISTER");
     await expect(page.getByText(projectName)).toBeVisible();
     await page.goto("/contacts/clients");
     await expect(page.getByText(clientName)).toBeVisible();

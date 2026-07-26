@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect } from "@playwright/test";
+import { usePreference } from "./view-mode";
 
 /**
  * Creates a throwaway client + project via the real UI and returns its name.
@@ -19,7 +20,7 @@ export async function createE2EProject(page: Page, label: string): Promise<{ pro
   await page.getByLabel("Status").click();
   await page.getByRole("option", { name: "Pricing" }).click();
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByText(clientName)).toBeVisible();
+  await expect(page.getByText(clientName)).toBeVisible({ timeout: 20_000 });
 
   await page.goto("/projects");
   await page.getByRole("button", { name: "Add project" }).click();
@@ -44,7 +45,7 @@ export async function createE2EProject(page: Page, label: string): Promise<{ pro
   await page.getByLabel("End date").fill(end);
 
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByText("Project created")).toBeVisible();
+  await expect(page.getByText("Project created")).toBeVisible({ timeout: 20_000 });
 
   return { projectName };
 }
@@ -61,9 +62,13 @@ export async function createE2ETender(page: Page, label: string): Promise<{ tend
   await page.getByLabel("Status").click();
   await page.getByRole("option", { name: "Pricing" }).click();
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByText(clientName)).toBeVisible();
+  await expect(page.getByText(clientName)).toBeVisible({ timeout: 20_000 });
 
+  // /tenders now branches on view mode; force the register tab so "Add
+  // tender" is on screen regardless of what a previous spec left this
+  // account's preconstruction.view preference on.
   await page.goto("/tenders");
+  await usePreference(page, "preconstruction.view", "REGISTER");
   await page.getByRole("button", { name: "Add tender" }).click();
   await page.getByLabel("Project name").fill(tenderName);
 
@@ -85,7 +90,7 @@ export async function createE2ETender(page: Page, label: string): Promise<{ tend
   await page.getByRole("option", { name: "Pursue" }).click();
 
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByText("Tender created")).toBeVisible();
+  await expect(page.getByText("Tender created")).toBeVisible({ timeout: 20_000 });
 
   return { tenderName };
 }

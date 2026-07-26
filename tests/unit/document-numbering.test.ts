@@ -5,6 +5,7 @@ import {
   tenderLetterCounterScope,
   variationCounterScope,
 } from "@/lib/documents/numbering";
+import { tenderCounterScope } from "@/lib/tenders/numbering";
 
 describe("formatDocumentNumber", () => {
   it("zero-pads to the configured width", () => {
@@ -31,5 +32,16 @@ describe("counter scope keys", () => {
     expect(progressClaimCounterScope("p1")).toBe("PROGRESS_CLAIM:p1");
     expect(tenderLetterCounterScope("t1")).toBe("TENDER_LETTER:t1");
     expect(variationCounterScope("p1")).not.toBe(variationCounterScope("p2"));
+  });
+
+  it("scopes tender numbering to the whole org, not per-project, matching the register itself being org-wide", () => {
+    expect(tenderCounterScope("org1")).toBe("TENDER:org1");
+    expect(tenderCounterScope("org1")).not.toBe(tenderCounterScope("org2"));
+  });
+
+  it("formats a tender code the same way T001 was specified — 3-digit zero-padded, consistent with P001/PO0001", () => {
+    expect(formatDocumentNumber("T", 3, 1)).toBe("T001");
+    expect(formatDocumentNumber("T", 3, 42)).toBe("T042");
+    expect(formatDocumentNumber("T", 3, 1234)).toBe("T1234");
   });
 });

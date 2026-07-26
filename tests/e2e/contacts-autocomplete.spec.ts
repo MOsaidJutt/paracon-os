@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { usePreference } from "./helpers/view-mode";
 
 // Requires the database to be seeded (npm run db:seed) and the dev server running.
 // Covers the Phase 13b "phone book" behaviour: every contact picker is a
@@ -21,8 +22,10 @@ test("tender form's client picker finds an existing client by partial name and r
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("Buildcorp Australia Pty Ltd")).toBeVisible();
 
-  // Reuse everywhere: the tender form's client field is a search, not a re-type.
+  // /tenders now branches on view mode; force the register tab so "Add tender"
+  // is on screen regardless of what a previous spec left this account on.
   await page.goto("/tenders");
+  await usePreference(page, "preconstruction.view", "REGISTER");
   await page.getByRole("button", { name: "Add tender" }).click();
   await page.getByLabel("Project name").fill("E2E Autocomplete Project");
 

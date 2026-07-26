@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { usePreference } from "./helpers/view-mode";
 
 // Requires the database to be seeded (npm run db:seed) and the dev server running.
 // Covers the "per-page flexibility" ask: a register table's column show/hide
@@ -14,7 +15,11 @@ test("hiding a column on the tender register persists across reload, and can be 
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("/dashboard");
 
+  // /tenders now branches on view mode; force the register tab so the table
+  // (and its Columns menu) is on screen regardless of the account's current
+  // preconstruction.view preference.
   await page.goto("/tenders");
+  await usePreference(page, "preconstruction.view", "REGISTER");
   await expect(page.getByRole("columnheader", { name: "Outcome" })).toBeVisible({ timeout: 20_000 });
 
   // Hide the Outcome column via the Columns menu.

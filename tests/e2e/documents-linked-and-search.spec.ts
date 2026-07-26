@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { createE2ETender } from "./helpers/entities";
+import { usePreference } from "./helpers/view-mode";
 
 // Requires the database to be seeded (npm run db:seed) and the dev server running.
 // Linked documents never touch storage (a saved Drive URL + metadata only), so
@@ -19,8 +20,11 @@ test("director adds a Google Drive link to a tender, and it's findable via globa
   const { tenderName } = await createE2ETender(page, "Link");
 
   // Tenders have no dedicated detail page, so the unified Documents panel
-  // lives inline in the edit sheet.
+  // lives inline in the edit sheet. /tenders now branches on view mode; force
+  // the register tab so the row is on screen regardless of what a previous
+  // spec left this account on.
   await page.goto("/tenders");
+  await usePreference(page, "preconstruction.view", "REGISTER");
   await page.getByText(tenderName).first().click();
   await expect(page.getByRole("heading", { name: "Edit tender" })).toBeVisible();
 

@@ -132,3 +132,29 @@ export async function resetKpiSlots(page: Page) {
   expect(ok, "failed to reset the KPI ring slots").toBe(true);
   await page.reload();
 }
+
+/**
+ * Writes a generic per-user preference (/api/preferences/[key], the registry
+ * in lib/preferences-registry.ts) and reloads.
+ *
+ * Same rationale as the dashboard-specific resets above: preferences live
+ * against the shared demo account, so a spec that changes one and fails
+ * before restoring it decides what every later spec — and every other test
+ * file — sees. Call this at the START of any spec whose assertions depend on
+ * a specific value, not only to clean up on the way out.
+ */
+export async function usePreference(page: Page, key: string, value: unknown) {
+  const ok = await page.evaluate(
+    async ({ key: k, value: v }) => {
+      const res = await fetch(`/api/preferences/${k}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value: v }),
+      });
+      return res.ok;
+    },
+    { key, value }
+  );
+  expect(ok, `failed to set preference "${key}" to ${JSON.stringify(value)}`).toBe(true);
+  await page.reload();
+}
