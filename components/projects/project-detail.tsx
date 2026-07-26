@@ -17,12 +17,14 @@ import { DocumentsPanel } from "@/components/documents/documents-panel";
 import { ProjectDocumentActions } from "@/components/documents/generated/project-document-actions";
 import { TradePackagesCard } from "./trade-packages-card";
 import { FinancialsTab } from "@/components/finance/financials-tab";
+import { VariationsRegister } from "@/components/finance/variations-register";
 import { DeliveryRegister } from "@/components/finance/delivery-register";
 import { SiteUpdatesPanel } from "@/components/site/site-updates-panel";
 import { IssuesPanel } from "@/components/site/issues-panel";
 import { TaskTreeTable, DEFAULT_SCHEDULE_COLUMNS, type ScheduleColumn } from "@/components/schedule/task-tree-table";
 import { BaselinesPanel } from "@/components/schedule/baselines-panel";
 import { AuditTrail } from "@/components/audit/audit-trail";
+import type { ViewMode } from "@/lib/view-mode";
 
 type ApiProject = ProjectRow & {
   client: { id: string; name: string };
@@ -42,7 +44,7 @@ function statusVariant(status: string): "default" | "secondary" | "destructive" 
   return "default";
 }
 
-export function ProjectDetail({ projectId }: { projectId: string }) {
+export function ProjectDetail({ projectId, viewMode = "FULL" }: { projectId: string; viewMode?: ViewMode }) {
   const queryClient = useQueryClient();
   const [editSheetOpen, setEditSheetOpen] = useState(false);
   const [activitySheetOpen, setActivitySheetOpen] = useState(false);
@@ -133,7 +135,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           <TabsTrigger value="program">Program</TabsTrigger>
           <TabsTrigger value="labour">Labour</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
-          <TabsTrigger value="financials">Financials</TabsTrigger>
+          <TabsTrigger value="financials">{viewMode === "SIMPLE" ? "Variations" : "Financials"}</TabsTrigger>
           <TabsTrigger value="deliveries">Deliveries</TabsTrigger>
           <TabsTrigger value="site-updates">Site updates</TabsTrigger>
           <TabsTrigger value="issues">Issues</TabsTrigger>
@@ -293,7 +295,11 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         </TabsContent>
 
         <TabsContent value="financials">
-          <FinancialsTab projectId={projectId} canApprove />
+          {viewMode === "SIMPLE" ? (
+            <VariationsRegister projectId={projectId} canApprove />
+          ) : (
+            <FinancialsTab projectId={projectId} canApprove />
+          )}
         </TabsContent>
 
         <TabsContent value="deliveries">
@@ -316,6 +322,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         projectId={projectId}
         activity={editingActivity}
         otherActivities={otherActivities}
+        defaultResponsible={project.pmUser?.name}
       />
     </div>
   );

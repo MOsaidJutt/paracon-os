@@ -33,6 +33,7 @@ export type ActivityRow = {
   parentId: string | null;
   name: string;
   trade: string;
+  responsible: string | null;
   startDate: string;
   endDate: string;
   isCritical: boolean;
@@ -48,6 +49,7 @@ const NO_PARENT = "__none__";
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   trade: z.string().min(1, "Trade is required"),
+  responsible: z.string().optional(),
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
   parentId: z.string(),
@@ -62,6 +64,7 @@ type FormValues = z.infer<typeof formSchema>;
 const EMPTY_DEFAULTS: FormValues = {
   name: "",
   trade: "",
+  responsible: "",
   startDate: "",
   endDate: "",
   parentId: NO_PARENT,
@@ -75,6 +78,7 @@ function toFormValues(activity: ActivityRow): FormValues {
   return {
     name: activity.name,
     trade: activity.trade,
+    responsible: activity.responsible ?? "",
     startDate: activity.startDate.slice(0, 10),
     endDate: activity.endDate.slice(0, 10),
     parentId: activity.parentId ?? NO_PARENT,
@@ -91,12 +95,15 @@ export function ActivityFormSheet({
   projectId,
   activity,
   otherActivities,
+  defaultResponsible,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
   activity?: ActivityRow | null;
   otherActivities: { id: string; name: string }[];
+  /** The project's PM, pre-filled into a new activity's Responsible field so it's visibly never blank rather than silently defaulted server-side. */
+  defaultResponsible?: string | null;
 }) {
   const queryClient = useQueryClient();
   const isEdit = !!activity;
@@ -124,8 +131,9 @@ export function ActivityFormSheet({
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "labour" });
 
   useEffect(() => {
-    if (open) form.reset(activity ? toFormValues(activity) : EMPTY_DEFAULTS);
-  }, [open, activity, form]);
+    if (!open) return;
+    form.reset(activity ? toFormValues(activity) : { ...EMPTY_DEFAULTS, responsible: defaultResponsible ?? "" });
+  }, [open, activity, defaultResponsible, form]);
 
   const isMilestone = form.watch("isMilestone");
   const hasDependency =
@@ -139,6 +147,7 @@ export function ActivityFormSheet({
       const payload = {
         name: values.name,
         trade: values.trade,
+        responsible: values.responsible || null,
         startDate: values.startDate,
         endDate: values.endDate,
         parentId: values.parentId === NO_PARENT ? null : values.parentId,
@@ -276,6 +285,21 @@ export function ActivityFormSheet({
                 )}
               />
 
+              <FormField
+                control={form.control}
+                name="responsible"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Responsible</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Foreman, lead hand or subbie" {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="status"

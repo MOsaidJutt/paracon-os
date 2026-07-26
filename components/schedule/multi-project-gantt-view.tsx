@@ -7,8 +7,11 @@ import { Gantt, ViewMode, type Task } from "gantt-task-react";
 import "gantt-task-react/dist/index.css";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDate } from "@/lib/tenders/format";
+import { MultiProjectTaskTable, type CrossProjectImpactEntry } from "./multi-project-task-table";
+import type { GanttStatus } from "@/lib/schedule/gantt-status";
 
 type CalendarActivity = {
   id: string;
@@ -18,8 +21,17 @@ type CalendarActivity = {
   startDate: string;
   endDate: string;
   isCritical: boolean;
+  status: string;
+  responsible: string | null;
   projectId: string;
   projectName: string;
+  baselineStartDate: string | null;
+  baselineEndDate: string | null;
+  delayDays: number | null;
+  ganttStatus: GanttStatus;
+  impactReason: string | null;
+  predecessorName: string | null;
+  crossProjectImpact: CrossProjectImpactEntry[];
 };
 
 type CalendarProject = { id: string; name: string; code: string; status: string };
@@ -74,9 +86,17 @@ function DemandBadge({ cell }: { cell: DemandCell }) {
  * labour-by-trade-over-time strip (reusing the same aggregateCombinedDemand
  * + RAG classification the Forecast matrix and Resource Planner use) shows
  * where total demand across all stacked projects exceeds capacity.
+ *
+ * `simplified` opts into the Module 4 additions (two-bar baseline/current
+ * comparison, RAG status, delay, cross-project snowball badge, 10-column
+ * task table) built for the Simplified Projects view. Full's existing
+ * /projects/schedule caller omits it, so Full renders exactly what it did
+ * before — nothing already built changes for Full.
  */
-export function MultiProjectGanttView() {
+export function MultiProjectGanttView({ simplified = false }: { simplified?: boolean } = {}) {
   const [monthAnchor, setMonthAnchor] = useState(() => startOfMonth(new Date()));
+  const [showBaseline, setShowBaseline] = useState(true);
+  const baselineActive = simplified && showBaseline;
 
   const from = monthAnchor;
   const to = new Date(Date.UTC(monthAnchor.getUTCFullYear(), monthAnchor.getUTCMonth() + 1, 0));
@@ -119,6 +139,30 @@ export function MultiProjectGanttView() {
       });
 
       for (const activity of projectActivities) {
+        // Diverged from baseline: colour the current bar red instead of the
+        // project colour — this doubles as the "red divergence" callout
+        // (FEEDBACK_NOTES §6) without a custom connector overlay. Full-view
+        // callers never diverge or show baseline rows — see `simplified` above.
+        const diverged = simplified && (activity.delayDays ?? 0) > 0;
+
+        if (baselineActive && activity.baselineStartDate && activity.baselineEndDate) {
+          result.push({
+            id: `baseline-${activity.id}`,
+            type: "task",
+            name: `Baseline: ${activity.name}`,
+            start: new Date(activity.baselineStartDate),
+            end: new Date(activity.baselineEndDate),
+            progress: 0,
+            isDisabled: true,
+            project: groupId,
+            styles: {
+              backgroundColor: "#ddc8b8",
+              backgroundSelectedColor: "#ddc8b8",
+              progressColor: "#ddc8b8",
+            },
+          });
+        }
+
         result.push({
           id: activity.id,
           type: "task",
@@ -129,19 +173,38 @@ export function MultiProjectGanttView() {
           isDisabled: true,
           project: groupId,
           styles: {
-            backgroundColor: color,
-            backgroundSelectedColor: color,
+            backgroundColor: diverged ? "#C62828" : color,
+            backgroundSelectedColor: diverged ? "#C62828" : color,
             progressColor: activity.isCritical ? "#C62828" : color,
           },
         });
       }
     });
     return result;
-  }, [data]);
+  }, [data, simplified, baselineActive]);
 
   const weeks = data?.weeks ?? [];
   const roles = data?.roles ?? [];
   const cellByKey = new Map((data?.demandCells ?? []).map((c) => [`${c.week}::${c.role}`, c]));
+
+  const codeByProject = new Map(projects.map((p) => [p.id, p.code]));
+  const taskRows = (data?.activities ?? []).map((a) => ({
+    id: a.id,
+    name: a.name,
+    responsible: a.responsible,
+    baselineStartDate: a.baselineStartDate,
+    baselineEndDate: a.baselineEndDate,
+    startDate: a.startDate,
+    endDate: a.endDate,
+    ganttStatus: a.ganttStatus,
+    delayDays: a.delayDays,
+    impactReason: a.impactReason,
+    predecessorName: a.predecessorName,
+    crossProjectImpact: a.crossProjectImpact,
+    projectId: a.projectId,
+    projectName: a.projectName,
+    projectCode: codeByProject.get(a.projectId) ?? "",
+  }));
 
   return (
     <div className="flex flex-col gap-4">
@@ -163,15 +226,34 @@ export function MultiProjectGanttView() {
         >
           <ChevronRight className="size-4" />
         </Button>
+
+        {simplified && (
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-sm text-foreground">Show baseline</span>
+            <Switch checked={showBaseline} onCheckedChange={setShowBaseline} />
+          </div>
+        )}
       </div>
 
-      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
         {projects.map((p, i) => (
           <span key={p.id} className="flex items-center gap-1.5">
             <span className="size-2.5 rounded-full" style={{ backgroundColor: colorForIndex(i) }} />
             {p.code} — {p.name}
           </span>
         ))}
+        {baselineActive && (
+          <span className="flex items-center gap-1.5">
+            <span className="size-2.5 rounded-full" style={{ backgroundColor: "#ddc8b8" }} />
+            Baseline
+          </span>
+        )}
+        {simplified && (
+          <span className="flex items-center gap-1.5">
+            <span className="size-2.5 rounded-full bg-rag-red" />
+            Behind baseline
+          </span>
+        )}
       </div>
 
       {roles.length > 0 && weeks.length > 0 && (
@@ -224,6 +306,8 @@ export function MultiProjectGanttView() {
           />
         </div>
       )}
+
+      {simplified && <MultiProjectTaskTable rows={taskRows} />}
     </div>
   );
 }
