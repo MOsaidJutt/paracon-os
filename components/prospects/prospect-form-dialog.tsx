@@ -20,19 +20,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProspectConfig } from "@/lib/prospects/config";
+import type { ProspectRow } from "./types";
 
-export type ProspectRow = {
-  id: string;
-  name: string;
-  contactName: string | null;
-  contactEmail: string | null;
-  contactPhone: string | null;
-  address: string | null;
-  estimatedValue: number | null;
-  stage: string;
-  notes: string | null;
-  convertedTenderId: string | null;
-};
+export type { ProspectRow };
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -42,6 +32,9 @@ const formSchema = z.object({
   address: z.string().optional(),
   estimatedValue: z.string().optional(),
   stage: z.string().min(1, "Stage is required"),
+  probability: z.string().optional(),
+  nextAction: z.string().optional(),
+  nextActionDate: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -56,6 +49,9 @@ function toFormValues(prospect?: ProspectRow | null): FormValues {
     address: prospect?.address ?? "",
     estimatedValue: prospect?.estimatedValue != null ? String(prospect.estimatedValue) : "",
     stage: prospect?.stage ?? "",
+    probability: prospect?.probability != null ? String(prospect.probability) : "",
+    nextAction: prospect?.nextAction ?? "",
+    nextActionDate: prospect?.nextActionDate ? prospect.nextActionDate.slice(0, 10) : "",
     notes: prospect?.notes ?? "",
   };
 }
@@ -96,6 +92,9 @@ export function ProspectFormDialog({
         contactPhone: values.contactPhone || null,
         address: values.address || null,
         estimatedValue: values.estimatedValue ? Number(values.estimatedValue) : null,
+        probability: values.probability ? Number(values.probability) : null,
+        nextAction: values.nextAction || null,
+        nextActionDate: values.nextActionDate || null,
         notes: values.notes || null,
       };
       const url = isEdit ? `/api/prospects/${prospect!.id}` : "/api/prospects";
@@ -217,18 +216,58 @@ export function ProspectFormDialog({
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="estimatedValue"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Estimated value ($)</FormLabel>
-                  <FormControl>
-                    <Input type="number" min="0" step="1000" {...field} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <FormField
+                control={form.control}
+                name="estimatedValue"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Estimated value ($)</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="0" step="1000" {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="probability"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Probability (%)</FormLabel>
+                    <FormControl>
+                      <Input type="number" min="0" max="100" {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
+            <div className="grid grid-cols-[1fr_10rem] gap-3">
+              <FormField
+                control={form.control}
+                name="nextAction"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Next action</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Call to confirm scope" {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="nextActionDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Due</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
             <FormField
               control={form.control}
               name="notes"

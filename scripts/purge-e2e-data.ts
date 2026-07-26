@@ -20,12 +20,15 @@ const PREFIX = "E2E ";
 async function main() {
   const dryRun = !process.argv.includes("--commit");
 
-  const [projects, tenders, clients] = await Promise.all([
+  const [prospects, projects, tenders, clients] = await Promise.all([
+    prisma.prospect.findMany({ where: { name: { startsWith: PREFIX } }, select: { id: true, name: true } }),
     prisma.project.findMany({ where: { name: { startsWith: PREFIX } }, select: { id: true, name: true, code: true } }),
     prisma.tender.findMany({ where: { projectName: { startsWith: PREFIX } }, select: { id: true, projectName: true } }),
     prisma.client.findMany({ where: { name: { startsWith: PREFIX } }, select: { id: true, name: true } }),
   ]);
 
+  console.log(`Prospects to delete: ${prospects.length}`);
+  for (const p of prospects) console.log(`  ${p.name}`);
   console.log(`Projects to delete: ${projects.length}`);
   for (const p of projects) console.log(`  ${p.code}  ${p.name}`);
   console.log(`Tenders to delete : ${tenders.length}`);
@@ -38,14 +41,19 @@ async function main() {
     return;
   }
 
-  // Projects and tenders first: a client can't be removed while either still
+  // Prospects first: one that has been converted holds a reference to its
+  // tender, which would otherwise block the tender delete below.
+  const deletedProspects = await prisma.prospect.deleteMany({ where: { name: { startsWith: PREFIX } } });
+
+  // Then projects and tenders: a client can't be removed while either still
   // references it.
   const deletedProjects = await prisma.project.deleteMany({ where: { name: { startsWith: PREFIX } } });
   const deletedTenders = await prisma.tender.deleteMany({ where: { projectName: { startsWith: PREFIX } } });
   const deletedClients = await prisma.client.deleteMany({ where: { name: { startsWith: PREFIX } } });
 
   console.log(
-    `\nDeleted ${deletedProjects.count} projects, ${deletedTenders.count} tenders, ${deletedClients.count} clients.`
+    `\nDeleted ${deletedProspects.count} prospects, ${deletedProjects.count} projects, ` +
+      `${deletedTenders.count} tenders, ${deletedClients.count} clients.`
   );
 }
 

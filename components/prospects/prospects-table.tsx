@@ -16,7 +16,14 @@ import {
 import { formatCurrency } from "@/lib/tenders/format";
 import { ProspectFormDialog, type ProspectRow } from "./prospect-form-dialog";
 
-export function ProspectsTable() {
+/**
+ * The dense table view of the register.
+ *
+ * `embedded` drops its own count-and-Add header, because ProspectsView already
+ * renders those above whichever view is showing — without it, the List view
+ * carried two "Add prospect" buttons stacked on top of each other.
+ */
+export function ProspectsTable({ embedded = false }: { embedded?: boolean } = {}) {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProspect, setEditingProspect] = useState<ProspectRow | null>(null);
@@ -62,19 +69,21 @@ export function ProspectsTable() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">{data?.prospects.length ?? 0} prospects</p>
-        <Button
-          size="sm"
-          onClick={() => {
-            setEditingProspect(null);
-            setDialogOpen(true);
-          }}
-        >
-          <Plus className="size-4" />
-          Add prospect
-        </Button>
-      </div>
+      {!embedded && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">{data?.prospects.length ?? 0} prospects</p>
+          <Button
+            size="sm"
+            onClick={() => {
+              setEditingProspect(null);
+              setDialogOpen(true);
+            }}
+          >
+            <Plus className="size-4" />
+            Add prospect
+          </Button>
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-lg border border-border">
         <Table>
