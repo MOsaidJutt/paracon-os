@@ -68,7 +68,11 @@ export function KpiRing({
             fill="none"
             stroke={RAG_BAND_HEX[band]}
             strokeWidth={stroke}
-            strokeLinecap="round"
+            // Square cap at zero. A round cap paints its rounded end even when
+            // the dash length is 0, so an empty ring rendered as a coloured dot
+            // at twelve o'clock — which reads as a sliver of progress that
+            // isn't there, the same lie the null handling exists to avoid.
+            strokeLinecap={dash > 0 ? "round" : "butt"}
             strokeDasharray={`${dash} ${circumference - dash}`}
             // Start the arc at 12 o'clock and run clockwise, the direction a
             // progress ring is read.

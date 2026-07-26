@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Eye, EyeOff, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,8 +12,6 @@ import { DEFAULT_KPI_SLOTS, RING_SLOT_COUNT, type KpiSlotId, type KpiSlotMeta } 
 import { DetailPanel } from "./detail-panel";
 
 const TITLE_BY_ID = Object.fromEntries(DASHBOARD_WIDGETS.simple.map((w) => [w.id, w.title]));
-
-type SlotsResponse = { available: KpiSlotMeta[]; slots: KpiSlotId[] };
 
 /**
  * "Customise" — widget order and visibility, plus which metric sits in each of
@@ -36,6 +33,10 @@ export function CustomisePanel({
   onSave,
   isSaving,
   availableWidgetIds,
+  slots,
+  onSlotsChange,
+  availableSlots,
+  slotsLoading,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -46,32 +47,17 @@ export function CustomisePanel({
   isSaving: boolean;
   /** Widget ids this user actually has data for — the rest aren't offered. */
   availableWidgetIds: string[];
+  /**
+   * Rings are controlled by the parent for the same reason the widget layout
+   * is: this panel unmounts whenever the dashboard behind it re-enters a
+   * loading state, and state held here would be silently discarded mid-edit.
+   */
+  slots: KpiSlotId[] | null;
+  onSlotsChange: (next: KpiSlotId[]) => void;
+  availableSlots: KpiSlotMeta[];
+  slotsLoading: boolean;
 }) {
   const queryClient = useQueryClient();
-  /** The pending ring selection, seeded from the server the first time the panel opens. */
-  const [slots, setSlots] = useState<KpiSlotId[] | null>(null);
-
-  const { data: slotData, isLoading: slotsLoading } = useQuery({
-    queryKey: ["dashboard", "kpi-slots"],
-    enabled: open,
-    queryFn: async () => {
-      const res = await fetch("/api/dashboard/kpi-slots");
-      if (!res.ok) throw new Error("Failed to load the metric options");
-      return (await res.json()) as SlotsResponse;
-    },
-  });
-
-  // Closing discards the pending selection, so Cancel really cancels and the
-  // next open starts from whatever is actually saved.
-  useEffect(() => {
-    if (open) return;
-    setSlots(null);
-  }, [open]);
-
-  useEffect(() => {
-    if (!slotData || slots !== null) return;
-    setSlots(slotData.slots);
-  }, [slotData, slots]);
 
   const saveSlots = useMutation({
     mutationFn: async (next: KpiSlotId[]) => {
@@ -109,17 +95,15 @@ export function CustomisePanel({
   }
 
   function chooseSlot(index: number, id: KpiSlotId) {
-    setSlots((current) => {
-      if (!current) return current;
-      const next = [...current];
-      // Picking a metric that's already in another slot swaps the two rather
-      // than silently duplicating it — the API rejects duplicates, and a
-      // disabled option would leave the user unable to reorder their rings.
-      const existing = next.indexOf(id);
-      if (existing !== -1) next[existing] = next[index];
-      next[index] = id;
-      return next;
-    });
+    if (!slots) return;
+    const next = [...slots];
+    // Picking a metric that's already in another slot swaps the two rather
+    // than silently duplicating it — the API rejects duplicates, and a
+    // disabled option would leave the user unable to reorder their rings.
+    const existing = next.indexOf(id);
+    if (existing !== -1) next[existing] = next[index];
+    next[index] = id;
+    onSlotsChange(next);
   }
 
   /**
@@ -192,7 +176,7 @@ export function CustomisePanel({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {(slotData?.available ?? []).map((option) => (
+                      {availableSlots.map((option) => (
                         <SelectItem key={option.id} value={option.id}>
                           {option.title}
                         </SelectItem>
@@ -262,10 +246,8 @@ export function CustomisePanel({
               onLayoutChange(
                 DASHBOARD_WIDGETS.simple.map((w) => ({ id: w.id, visible: w.defaultVisible ?? true }))
               );
-              if (slotData) {
-                const allowed = new Set(slotData.available.map((slot) => slot.id));
-                setSlots(DEFAULT_KPI_SLOTS.filter((id) => allowed.has(id)).slice(0, RING_SLOT_COUNT));
-              }
+              const allowed = new Set(availableSlots.map((slot) => slot.id));
+              onSlotsChange(DEFAULT_KPI_SLOTS.filter((id) => allowed.has(id)).slice(0, RING_SLOT_COUNT));
             }}
           >
             <RotateCcw className="size-4" /> Reset to default

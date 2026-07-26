@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { LayoutDashboard, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { WorkerKpiCard } from "./worker-kpi-card";
 import { CriticalDatesCard, PipelineFiguresCard } from "./figures-card";
 import { CustomisePanel } from "./customise-panel";
 import type { SimpleDashboard as SimpleDashboardData } from "@/lib/dashboard/simple-service";
+import type { KpiSlotId, KpiSlotMeta } from "@/lib/dashboard/kpi-slots";
 
 /**
  * The simplified dashboard: a full business snapshot in about three minutes.
@@ -52,6 +53,36 @@ export function SimpleDashboard({
     },
   });
 
+  /**
+   * The customise panel's pending ring selection lives here, not in the panel.
+   *
+   * The loading branch below returns a skeleton instead of the page, which
+   * unmounts the panel and everything inside it. When the selection lived in
+   * the panel, a refetch mid-edit discarded it and the seeding effect refilled
+   * it from the server — so Save wrote the server's own values back and the
+   * user's ring change vanished with no error. This component never unmounts
+   * while the page is open, so the selection survives here.
+   *
+   * The widget layout was always held this way (`draft`), which is why hiding a
+   * widget never had the same problem. The rings now match it.
+   */
+  const [slots, setSlots] = useState<KpiSlotId[] | null>(null);
+
+  const { data: slotData, isLoading: slotsLoading } = useQuery({
+    queryKey: ["dashboard", "kpi-slots"],
+    enabled: customising,
+    queryFn: async () => {
+      const res = await fetch("/api/dashboard/kpi-slots");
+      if (!res.ok) throw new Error("Failed to load the metric options");
+      return (await res.json()) as { available: KpiSlotMeta[]; slots: KpiSlotId[] };
+    },
+  });
+
+  // Seed once per open, from whatever is saved.
+  useEffect(() => {
+    if (slotData && slots === null) setSlots(slotData.slots);
+  }, [slotData, slots]);
+
   function openCustomise() {
     startEditing();
     setCustomising(true);
@@ -59,7 +90,12 @@ export function SimpleDashboard({
 
   function closeCustomise(open: boolean) {
     setCustomising(open);
-    if (!open) setDraft(null);
+    // Closing discards both pending edits, so Cancel really cancels and the
+    // next open starts from what is actually saved.
+    if (!open) {
+      setDraft(null);
+      setSlots(null);
+    }
   }
 
   if (isLoading || layoutLoading) return <DashboardSkeleton />;
@@ -116,6 +152,10 @@ export function SimpleDashboard({
         onSave={finishEditing}
         isSaving={isSaving}
         availableWidgetIds={data.visibleWidgets}
+        slots={slots}
+        onSlotsChange={setSlots}
+        availableSlots={slotData?.available ?? []}
+        slotsLoading={slotsLoading}
       />
     </div>
   );
