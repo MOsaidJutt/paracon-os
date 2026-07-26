@@ -15,6 +15,8 @@ import { z } from "zod";
 export const PREFERENCE_SCHEMAS = {
   /** Prospects register: board lanes or a dense table. */
   "prospects.view": z.enum(["BOARD", "LIST"]),
+  /** Pre-Construction: the working tender register, or the bid-intelligence dashboard. */
+  "preconstruction.view": z.enum(["REGISTER", "INTEL"]),
 } as const;
 
 export type PreferenceKey = keyof typeof PREFERENCE_SCHEMAS;
@@ -26,6 +28,9 @@ export const preferenceKeySchema = z.enum(
 export const PREFERENCE_DEFAULTS: { [K in PreferenceKey]: z.infer<(typeof PREFERENCE_SCHEMAS)[K]> } = {
   // Board first: it makes cold -> warm literal, which is what the module is for.
   "prospects.view": "BOARD",
+  // The register is the day-to-day working surface; Intel is analysis someone
+  // opts into, not the thing they land on.
+  "preconstruction.view": "REGISTER",
 };
 
 /** Parses a stored value, falling back to the default rather than throwing — a bad preference must never break a page. */

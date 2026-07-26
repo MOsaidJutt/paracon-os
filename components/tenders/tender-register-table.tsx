@@ -32,6 +32,64 @@ const DEFAULT_COLUMNS = [
 ];
 const TITLE_BY_ID = Object.fromEntries(DEFAULT_COLUMNS.map((c) => [c.id, c.title]));
 
+/**
+ * The same register data as a stacked card list — the table's horizontal
+ * scroll works but isn't the pleasant path on a phone. Card and table share
+ * the same query, the same row-click handler and the same overdue/status
+ * logic, so there is exactly one source of truth for what a tender "is";
+ * only the layout differs, switched by breakpoint via `md:hidden` on the
+ * caller, not by a second data fetch.
+ */
+function TenderCardList({
+  tenders,
+  onSelect,
+}: {
+  tenders: ApiTender[];
+  onSelect: (tender: ApiTender) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      {tenders.map((tender) => {
+        const overdue = isOverdue(tender.due, tender.submitted);
+        return (
+          <button
+            key={tender.id}
+            type="button"
+            onClick={() => onSelect(tender)}
+            // Named explicitly rather than left to its text content: without
+            // this a screen reader announces code, project, client, status,
+            // value and due date as one run-on label for every card.
+            aria-label={`Open ${tender.code ? `${tender.code} ` : ""}${tender.projectName}`}
+            className="flex min-h-12 flex-col gap-1 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs font-medium tabular-nums text-muted-foreground">
+                  {tender.code ?? "—"}
+                </span>
+                <span className="block truncate font-medium text-foreground">{tender.projectName}</span>
+                <span className="block truncate text-sm text-muted-foreground">{tender.client.name}</span>
+              </span>
+              <Badge variant={statusVariant(tender.status)} className="shrink-0">
+                {tender.status}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between gap-2 text-sm">
+              <span className="text-foreground">{formatCurrency(tender.value)}</span>
+              {tender.due && (
+                <span className={overdue ? "flex items-center gap-1 text-destructive" : "text-muted-foreground"}>
+                  {overdue && <AlertTriangle className="size-3.5" />}
+                  {formatDate(tender.due)}
+                </span>
+              )}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function statusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
   if (status === "Won") return "default";
   if (status === "Lost" || status === "Withdrawn") return "destructive";
@@ -150,10 +208,20 @@ export function TenderRegisterTable() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border">
+      {/* Table first in DOM order, card list second — both exist at all
+          breakpoints (CSS `hidden` toggles which one paints), but a hidden
+          element still counts for a plain getByText() lookup elsewhere in the
+          suite. Table-first is what every other spec asserting a tender name
+          without qualifying which layout already assumed, since the table is
+          the layout Playwright's default (desktop-sized) viewport shows. */}
+      <div className="hidden overflow-x-auto rounded-lg border border-border md:block">
         <Table>
           <TableHeader>
             <TableRow>
+              {/* Pinned first, not part of the show/hide set: it's the record's
+                  identity rather than a data column someone would choose to
+                  hide, same reasoning as never letting it be edited. */}
+              <TableHead className="w-20">T#</TableHead>
               {visibleColumns.map((c) => (
                 <TableHead key={c.id}>{TITLE_BY_ID[c.id]}</TableHead>
               ))}
@@ -162,7 +230,7 @@ export function TenderRegisterTable() {
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={visibleColumns.length} className="text-center text-muted-foreground">
+                <TableCell colSpan={visibleColumns.length + 1} className="text-center text-muted-foreground">
                   Loading...
                 </TableCell>
               </TableRow>
@@ -178,6 +246,9 @@ export function TenderRegisterTable() {
                     setSheetOpen(true);
                   }}
                 >
+                  <TableCell className="font-medium tabular-nums text-muted-foreground">
+                    {tender.code ?? "—"}
+                  </TableCell>
                   {visibleColumns.map((c) => (
                     <TableCell key={c.id}>{renderCell(c.id, tender, overdue)}</TableCell>
                   ))}
@@ -186,13 +257,31 @@ export function TenderRegisterTable() {
             })}
             {data && data.tenders.length === 0 && (
               <TableRow>
-                <TableCell colSpan={visibleColumns.length} className="text-center text-muted-foreground">
+                <TableCell colSpan={visibleColumns.length + 1} className="text-center text-muted-foreground">
                   No tenders found.
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
+      </div>
+
+      <div className="block md:hidden">
+        {isLoading ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">Loading...</p>
+        ) : data && data.tenders.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+            No tenders found.
+          </p>
+        ) : (
+          <TenderCardList
+            tenders={data?.tenders ?? []}
+            onSelect={(tender) => {
+              setEditingTender(tender);
+              setSheetOpen(true);
+            }}
+          />
+        )}
       </div>
 
       <TenderFormSheet open={sheetOpen} onOpenChange={setSheetOpen} tender={editingTender} />
