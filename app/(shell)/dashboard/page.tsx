@@ -6,6 +6,8 @@ import { formatDate } from "@/lib/tenders/format";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DirectorDashboard } from "@/components/dashboard/director-dashboard";
 import { PmDashboard } from "@/components/dashboard/pm-dashboard";
+import { SimpleDashboard } from "@/components/dashboard/simple/simple-dashboard";
+import { getViewMode } from "@/lib/view-mode";
 
 const ROLE_COPY: Record<string, { title: string; description: string }> = {
   estimator: {
@@ -26,6 +28,20 @@ export default async function DashboardPage() {
 
   const permissions = session?.user?.permissions ?? [];
   const canAssessScorecard = permissions.includes("scorecard.assess");
+
+  // SIMPLIFIED is the default landing view for every role. One page serves all
+  // of them: the service returns only the sections the caller's permissions
+  // allow, so an estimator and a director see the same layout with different
+  // cards on it, rather than two separate dashboards.
+  const viewMode = await getViewMode(session!.user.organisationId, session!.user.id);
+  if (viewMode === "SIMPLE") {
+    return (
+      <SimpleDashboard
+        userName={session?.user?.name ?? session?.user?.email ?? "there"}
+        canEditSettings={permissions.includes("admin.settings")}
+      />
+    );
+  }
 
   if (permissions.includes("dashboard.director")) {
     return (
