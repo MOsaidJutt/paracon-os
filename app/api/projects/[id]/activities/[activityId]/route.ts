@@ -78,6 +78,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       data: {
         name: body.name,
         trade: body.trade,
+        responsible: body.responsible,
         startDate: body.startDate,
         endDate: body.endDate,
         parentId: body.parentId,

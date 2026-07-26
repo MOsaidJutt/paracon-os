@@ -5,9 +5,19 @@ import { toErrorResponse } from "@/lib/api-error";
 import { weekKey, weekSequence } from "@/lib/dates";
 import { classifyRag, computeWeeklySupply } from "@/lib/forecast/engine";
 import { loadForecastConfig } from "@/lib/forecast/config";
+import { loadScheduleConfig } from "@/lib/schedule/config";
 import { aggregateCombinedDemand, findTradeConflicts, type ProjectActivities } from "@/lib/schedule/conflicts";
+import { computeDelayDays, computeGanttStatus } from "@/lib/schedule/gantt-status";
 
 const DAY_MS = 86_400_000;
+
+type CrossProjectImpactEntry = {
+  workerId: string;
+  workerName: string;
+  otherProjectId: string;
+  otherProjectName: string;
+  conflictWeeks: string[];
+};
 
 /**
  * Cross-project schedule calendar (FEEDBACK_NOTES §3 / Buildpass screenshots
@@ -49,14 +59,89 @@ export async function GET(req: NextRequest) {
             endDate: true,
             isCritical: true,
             labourRequired: true,
+            status: true,
+            responsible: true,
           },
         },
       },
       orderBy: { name: "asc" },
     });
 
+    const activityIds = projects.flatMap((p) => p.activities.map((a) => a.id));
+    const projectIds = projects.map((p) => p.id);
+
+    const [latestBaselines, delayRecords, dependencyEdges, scheduleConfig] = await Promise.all([
+      db.baseline.findMany({
+        where: { projectId: { in: projectIds } },
+        orderBy: { createdAt: "desc" },
+        include: { tasks: { select: { activityId: true, startDate: true, endDate: true } } },
+      }),
+      db.delayRecord.findMany({
+        where: { activityId: { in: activityIds } },
+        orderBy: { createdAt: "desc" },
+        select: { activityId: true, reason: true, downstreamImpactedJson: true },
+      }),
+      db.dependency.findMany({
+        where: { successorId: { in: activityIds } },
+        select: { predecessorId: true, successorId: true },
+      }),
+      loadScheduleConfig(session.user.organisationId),
+    ]);
+
+    // Both lists are ordered createdAt desc, so the first row seen per
+    // project/activity is the most recent — no separate "latest" query needed.
+    const baselineByProject = new Map<string, (typeof latestBaselines)[number]>();
+    for (const b of latestBaselines) {
+      if (!baselineByProject.has(b.projectId)) baselineByProject.set(b.projectId, b);
+    }
+    const baselineTaskByActivity = new Map<string, { startDate: Date; endDate: Date }>();
+    for (const baseline of baselineByProject.values()) {
+      for (const t of baseline.tasks) {
+        baselineTaskByActivity.set(t.activityId, { startDate: t.startDate, endDate: t.endDate });
+      }
+    }
+
+    const latestDelayByActivity = new Map<string, (typeof delayRecords)[number]>();
+    for (const d of delayRecords) {
+      if (!latestDelayByActivity.has(d.activityId)) latestDelayByActivity.set(d.activityId, d);
+    }
+
+    const nameByActivity = new Map(projects.flatMap((p) => p.activities.map((a) => [a.id, a.name] as const)));
+    const predecessorNamesBySuccessor = new Map<string, string[]>();
+    for (const dep of dependencyEdges) {
+      const name = nameByActivity.get(dep.predecessorId);
+      if (!name) continue;
+      const list = predecessorNamesBySuccessor.get(dep.successorId) ?? [];
+      list.push(name);
+      predecessorNamesBySuccessor.set(dep.successorId, list);
+    }
+
     const activities = projects.flatMap((p) =>
-      p.activities.map((a) => ({ ...a, projectId: p.id, projectName: p.name }))
+      p.activities.map((a) => {
+        const baselineTask = baselineTaskByActivity.get(a.id) ?? null;
+        const delay = latestDelayByActivity.get(a.id) ?? null;
+        // Read-only, never recomputed here — the snowball was already computed
+        // and frozen into DelayRecord.downstreamImpactedJson at commit-move time.
+        const crossProjectImpact: CrossProjectImpactEntry[] = delay && !Array.isArray(delay.downstreamImpactedJson)
+          ? ((delay.downstreamImpactedJson as { crossProjectImpact?: CrossProjectImpactEntry[] }).crossProjectImpact ?? [])
+          : [];
+
+        return {
+          ...a,
+          projectId: p.id,
+          projectName: p.name,
+          baselineStartDate: baselineTask?.startDate ?? null,
+          baselineEndDate: baselineTask?.endDate ?? null,
+          delayDays: computeDelayDays(baselineTask?.endDate ?? null, a.endDate),
+          ganttStatus: computeGanttStatus(
+            { today: now, currentEndDate: a.endDate, isComplete: a.status === "Complete" },
+            scheduleConfig.ganttAtRiskThresholdDays
+          ),
+          impactReason: delay?.reason ?? null,
+          predecessorName: (predecessorNamesBySuccessor.get(a.id) ?? []).join(", ") || null,
+          crossProjectImpact,
+        };
+      })
     );
 
     const weekCount = Math.max(1, Math.ceil((to.getTime() - from.getTime()) / (7 * DAY_MS)) + 1);

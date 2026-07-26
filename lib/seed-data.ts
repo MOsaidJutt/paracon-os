@@ -755,6 +755,15 @@ export const CONFIG_DEFAULTS = [
     valueJson: 2,
   },
   {
+    key: "schedule.ganttStatus.atRiskThresholdDays",
+    group: "schedule",
+    type: "NUMBER" as const,
+    label: "Gantt status — at-risk threshold (days)",
+    description:
+      "On the multi-project Gantt, an incomplete activity whose current end date has passed today by fewer than this many days shows At Risk (amber); at or beyond it shows Behind (red).",
+    valueJson: 2,
+  },
+  {
     key: "scorecard.gauge.goodThreshold",
     group: "scorecard",
     type: "NUMBER" as const,

@@ -34,7 +34,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const session = await requirePermission("program.edit");
     const db = getTenantContext(session.user.organisationId);
 
-    const project = await db.project.findFirst({ where: { id: params.id } });
+    const project = await db.project.findFirst({
+      where: { id: params.id },
+      include: { pmUser: { select: { name: true } } },
+    });
     if (!project) throw new NotFoundError("Project not found");
 
     const body = createActivitySchema.parse(await req.json());
@@ -57,6 +60,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         orderIndex: body.orderIndex ?? 0,
         name: body.name,
         trade: body.trade,
+        // Never blank: an explicit value wins, an explicit empty string is
+        // left as the user's own choice, and only a genuinely omitted field
+        // falls back to the project's PM.
+        responsible: body.responsible !== undefined ? body.responsible : project.pmUser?.name ?? null,
         startDate: body.startDate,
         endDate: body.endDate,
         isMilestone: body.isMilestone,

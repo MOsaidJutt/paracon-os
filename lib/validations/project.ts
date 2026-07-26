@@ -68,6 +68,9 @@ export const createActivitySchema = z
   .object({
     name: z.string().min(1, "Name is required").max(200),
     trade: z.string().min(1, "Trade is required"),
+    // Optional on input: left unset, the route defaults it to the project's
+    // PM so a row is never blank without forcing every caller to pass it.
+    responsible: z.string().max(160).optional().nullable(),
     startDate: isoDate,
     endDate: isoDate,
     parentId: z.string().optional().nullable(),
@@ -85,6 +88,7 @@ export const createActivitySchema = z
 export const updateActivitySchema = z.object({
   name: z.string().min(1).max(200).optional(),
   trade: z.string().min(1).optional(),
+  responsible: z.string().max(160).optional().nullable(),
   startDate: isoDate.optional(),
   endDate: isoDate.optional(),
   parentId: z.string().optional().nullable(),

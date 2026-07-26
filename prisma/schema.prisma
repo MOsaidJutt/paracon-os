@@ -708,6 +708,12 @@ model ProgramActivity {
   orderIndex     Int               @default(0)
   name           String
   trade          String
+  // Free text, not a User FK: the person named here is as often a foreman,
+  // lead carpenter or subcontractor foreman as an office User with a login,
+  // and the client's own examples were trade-crew names, not account names.
+  // Defaulted to the project's PM at creation (never blank), then editable
+  // per activity from there.
+  responsible    String?
   startDate      DateTime
   endDate        DateTime
   isCritical     Boolean           @default(false)

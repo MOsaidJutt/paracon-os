@@ -17,6 +17,8 @@ export const PREFERENCE_SCHEMAS = {
   "prospects.view": z.enum(["BOARD", "LIST"]),
   /** Pre-Construction: the working tender register, or the bid-intelligence dashboard. */
   "preconstruction.view": z.enum(["REGISTER", "INTEL"]),
+  /** Projects: the project register list, or the multi-project stacked Gantt. */
+  "projects.view": z.enum(["LIST", "GANTT"]),
 } as const;
 
 export type PreferenceKey = keyof typeof PREFERENCE_SCHEMAS;
@@ -31,6 +33,8 @@ export const PREFERENCE_DEFAULTS: { [K in PreferenceKey]: z.infer<(typeof PREFER
   // The register is the day-to-day working surface; Intel is analysis someone
   // opts into, not the thing they land on.
   "preconstruction.view": "REGISTER",
+  // The list is the day-to-day register; the Gantt is opted into for schedule review.
+  "projects.view": "LIST",
 };
 
 /** Parses a stored value, falling back to the default rather than throwing — a bad preference must never break a page. */
