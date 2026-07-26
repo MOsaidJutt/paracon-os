@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "db:seed": "tsx -r dotenv/config prisma/seed.ts",
@@ -12,7 +12,8 @@
     "dev:storage": "tsx -r dotenv/config scripts/dev-storage.ts",
     "dev:all": "tsx -r dotenv/config scripts/dev-all.ts",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "postinstall": "prisma generate"
   },
   "prisma": {
     "seed": "tsx -r dotenv/config prisma/seed.ts"
