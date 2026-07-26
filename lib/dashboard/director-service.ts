@@ -7,7 +7,7 @@ import { aggregateLabourDemand, aggregateAllocatedByTrade, filterUpcomingMilesto
 import { loadTenderConfig } from "@/lib/tenders/config";
 import { activeStatusesFromWeights, calcPipelineSummary } from "@/lib/tenders/calculations";
 import { computeForecastResult } from "@/lib/forecast/snapshot";
-import type { CapacityHeadroom } from "@/lib/forecast/engine";
+import type { CapacityHeadroom, MatrixCell } from "@/lib/forecast/engine";
 
 export type ProjectHealthRow = { id: string; name: string; code: string; status: ProjectHealthStatus; reasons: string[] };
 
@@ -18,7 +18,20 @@ export type DirectorDashboard = {
   // Same shape CapacityHeadroomCard (components/forecast/capacity-headroom.tsx)
   // already renders — reused as-is, no new capacity card needed.
   capacity: CapacityHeadroom;
-  pipeline: { weightedPipeline: number; totalPipeline: number; activeBids: number; winRateValue: number };
+  // The role x block cells behind `capacity`. The Full view's capacity card
+  // doesn't use them (it lazy-loads /api/forecast/matrix on expand), but the
+  // simplified dashboard derives per-trade utilisation from them, and the
+  // forecast run that produces them has already happened by this point —
+  // returning them costs nothing and saves a second full forecast pass.
+  forecastMatrix: MatrixCell[];
+  pipeline: {
+    weightedPipeline: number;
+    totalPipeline: number;
+    activeBids: number;
+    winRateValue: number;
+    revenueWon: number;
+    submissionRate: number;
+  };
   alerts: Alert[];
 };
 
@@ -147,11 +160,14 @@ export async function getDirectorDashboard(
     atRisk,
     criticalDates,
     capacity: forecastResult.headroom,
+    forecastMatrix: forecastResult.matrix,
     pipeline: {
       weightedPipeline: pipelineSummary.weightedPipeline,
       totalPipeline: pipelineSummary.totalPipeline,
       activeBids: pipelineSummary.activeBids,
       winRateValue: pipelineSummary.winRateValue,
+      revenueWon: pipelineSummary.revenueWon,
+      submissionRate: pipelineSummary.submissionRate,
     },
     alerts,
   };

@@ -258,8 +258,16 @@ export function PmDashboard({ canAssessScorecard }: { canAssessScorecard: boolea
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-3">
         <DashboardFilters projects={projectOptions} projectId={projectId} onProjectChange={setProjectId} />
+        {/* finishEditing is wrapped rather than passed by reference: it takes an
+            optional layout, so handing it straight to onClick would pass the
+            click event as the thing to persist. */}
         {!isLoading && data && data.projects.length > 0 && (
-          <Button variant="outline" size="sm" onClick={editing ? finishEditing : startEditing} disabled={isSaving}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={editing ? () => finishEditing() : startEditing}
+            disabled={isSaving}
+          >
             <Settings2 className="size-4" />
             {editing ? (isSaving ? "Saving..." : "Done") : "Customize"}
           </Button>

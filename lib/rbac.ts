@@ -28,6 +28,19 @@ async function loadFreshPermissions(userId: string): Promise<string[]> {
 }
 
 /**
+ * Loads the current session with its permission slugs re-read from the DB,
+ * without asserting any one slug. For the handful of surfaces that serve every
+ * role and vary their *content* by permission rather than allowing or denying
+ * outright — the simplified dashboard being the one that matters. Anything
+ * that gates access still uses requirePermission.
+ */
+export async function requireSessionWithPermissions(): Promise<Session> {
+  const session = await requireSession();
+  session.user.permissions = await loadFreshPermissions(session.user.id);
+  return session;
+}
+
+/**
  * Loads the current session and asserts it carries the given permission
  * slug, checked fresh against the DB. Throws ForbiddenError if missing.
  * Call at the top of every server action / route handler that touches

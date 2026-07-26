@@ -28,7 +28,7 @@ export function useDashboardLayout(dashboardKey: DashboardKey) {
 
   const savedLayout = resolveDashboardLayout(dashboardKey, data?.widgets ?? null);
 
-  const { mutate: persist, isPending: isSaving } = useMutation({
+  const { mutateAsync: persist, isPending: isSaving } = useMutation({
     mutationFn: async (widgets: WidgetState[]) => {
       const res = await fetch("/api/dashboard/layout", {
         method: "PUT",
@@ -48,8 +48,23 @@ export function useDashboardLayout(dashboardKey: DashboardKey) {
     setEditing(true);
   }
 
-  function finishEditing() {
-    if (draft) persist(draft);
+  /**
+   * Awaits the write before leaving edit mode. Fire-and-forget loses the
+   * layout outright if the user reloads or navigates in the moment after
+   * clicking Save: the request is cancelled mid-flight (ECONNRESET) and
+   * nothing says so. Callers may ignore the returned promise; those that
+   * close a panel on save should await it.
+   *
+   * `next` lets a caller hand in the layout it is actually displaying rather
+   * than trusting this hook's `draft` to be current. An editor that lives in a
+   * separate component and saves through a prop can otherwise call a closure
+   * captured before its last edit, and the write is silently skipped — which
+   * is exactly what happened to the simplified dashboard's customise panel:
+   * the ring preference saved, the widget layout did not, and nothing errored.
+   */
+  async function finishEditing(next?: WidgetState[]) {
+    const pending = next ?? draft;
+    if (pending) await persist(pending);
     setEditing(false);
   }
 
