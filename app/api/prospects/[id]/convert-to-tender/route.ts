@@ -5,6 +5,7 @@ import { auditLog } from "@/lib/audit";
 import { toErrorResponse } from "@/lib/api-error";
 import { BadRequestError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { deriveTenderComputedFields, loadTenderConfig } from "@/lib/tenders/config";
+import { formatDocumentNumber, nextCounterValue, tenderCounterScope } from "@/lib/tenders/numbering";
 
 /**
  * "Lead won" path: converts a prospect into a Tender, finding-or-creating the
@@ -56,9 +57,13 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       config
     );
 
+    const sequence = await nextCounterValue(session.user.organisationId, tenderCounterScope(session.user.organisationId));
+    const code = formatDocumentNumber(config.numberPrefix, config.numberPadding, sequence);
+
     const tender = await db.tender.create({
       data: {
         organisationId: session.user.organisationId,
+        code,
         projectName: prospect.name,
         address: prospect.address,
         status: config.statusList[0] ?? "In Progress",

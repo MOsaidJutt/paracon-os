@@ -517,6 +517,13 @@ model Tender {
   id                    String         @id @default(cuid())
   organisationId        String
   organisation          Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  // Auto-numbered once at creation (incl. on prospect conversion) via the
+  // Counter model — same "TENDER:<organisationId>" scope pattern as PO/VQ/claim
+  // numbering (lib/tenders/numbering.ts), prefix/padding from tender.numberPrefix
+  // / tender.numberPadding config. Never renumbered on edit. Nullable only
+  // because it was backfilled onto pre-existing rows (received-date order,
+  // oldest = T001) rather than being present from the first migration.
+  code                  String?        @unique
   projectName           String
   address               String?
   status                String

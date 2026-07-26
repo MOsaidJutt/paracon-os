@@ -29,6 +29,8 @@ import type { TenderConfig } from "@/lib/tenders/config";
 
 export type TenderRow = {
   id: string;
+  /** Assigned once at creation (T001, T002, ...) — never editable, never reassigned. */
+  code: string | null;
   projectName: string;
   address: string | null;
   status: string;
@@ -217,7 +219,9 @@ export function TenderFormSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader>
-          <SheetTitle>{isEdit ? "Edit tender" : "New tender"}</SheetTitle>
+          <SheetTitle>
+            {isEdit ? (tender?.code ? `${tender.code} · Edit tender` : "Edit tender") : "New tender"}
+          </SheetTitle>
           <SheetDescription>
             Win probability, value band, year/quarter and duration are derived automatically from the
             Config registry — no need to set them by hand.

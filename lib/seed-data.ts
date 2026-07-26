@@ -227,6 +227,22 @@ export const CONFIG_DEFAULTS = [
     valueJson: ["Pursue", "Pass", "Passive"],
   },
   {
+    key: "tender.numberPrefix",
+    group: "tender",
+    type: "TEXT" as const,
+    label: "Tender number prefix",
+    description: 'Prefix for an auto-generated tender number (e.g. "T" produces "T001"), org-wide sequential.',
+    valueJson: "T",
+  },
+  {
+    key: "tender.numberPadding",
+    group: "tender",
+    type: "NUMBER" as const,
+    label: "Tender number padding (digits)",
+    description: 'Zero-pads the tender sequence number to this many digits (3 produces "T001"). 0 disables padding.',
+    valueJson: 3,
+  },
+  {
     key: "forecast.ragThresholds",
     group: "forecast",
     type: "WEIGHTS" as const,

@@ -5,6 +5,7 @@ import { auditLog } from "@/lib/audit";
 import { toErrorResponse } from "@/lib/api-error";
 import { createTenderSchema, listTendersQuerySchema } from "@/lib/validations/tender";
 import { assertInList, deriveTenderComputedFields, loadTenderConfig } from "@/lib/tenders/config";
+import { formatDocumentNumber, nextCounterValue, tenderCounterScope } from "@/lib/tenders/numbering";
 import { sendEvent } from "@/lib/inngest/send-safe";
 
 export async function GET(req: NextRequest) {
@@ -72,9 +73,13 @@ export async function POST(req: NextRequest) {
       config
     );
 
+    const sequence = await nextCounterValue(session.user.organisationId, tenderCounterScope(session.user.organisationId));
+    const code = formatDocumentNumber(config.numberPrefix, config.numberPadding, sequence);
+
     const tender = await db.tender.create({
       data: {
         organisationId: session.user.organisationId,
+        code,
         projectName: body.projectName,
         address: body.address,
         status: body.status,

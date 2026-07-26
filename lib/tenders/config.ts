@@ -13,22 +13,47 @@ export type TenderConfig = {
   clientStatusList: string[];
   bidDecisionList: string[];
   intentList: string[];
+  numberPrefix: string;
+  numberPadding: number;
 };
 
 /** Loads every Config-driven list/weight the tender pipeline depends on, resolved for this org. */
 export async function loadTenderConfig(organisationId: string): Promise<TenderConfig> {
-  const [statusList, outcomeList, winProbWeights, statusWeights, valueBands, clientStatusList, bidDecisionList, intentList] =
-    await Promise.all([
-      getConfig<string[]>("tender.statusList", organisationId),
-      getConfig<string[]>("tender.outcomeList", organisationId),
-      getConfig<Record<string, number>>("tender.winProbWeights", organisationId),
-      getConfig<Record<string, number>>("tender.statusWeights", organisationId),
-      getConfig<ValueBand[]>("tender.valueBands", organisationId),
-      getConfig<string[]>("client.statusList", organisationId),
-      getConfig<string[]>("tender.bidDecisionList", organisationId),
-      getConfig<string[]>("tender.intentList", organisationId),
-    ]);
-  return { statusList, outcomeList, winProbWeights, statusWeights, valueBands, clientStatusList, bidDecisionList, intentList };
+  const [
+    statusList,
+    outcomeList,
+    winProbWeights,
+    statusWeights,
+    valueBands,
+    clientStatusList,
+    bidDecisionList,
+    intentList,
+    numberPrefix,
+    numberPadding,
+  ] = await Promise.all([
+    getConfig<string[]>("tender.statusList", organisationId),
+    getConfig<string[]>("tender.outcomeList", organisationId),
+    getConfig<Record<string, number>>("tender.winProbWeights", organisationId),
+    getConfig<Record<string, number>>("tender.statusWeights", organisationId),
+    getConfig<ValueBand[]>("tender.valueBands", organisationId),
+    getConfig<string[]>("client.statusList", organisationId),
+    getConfig<string[]>("tender.bidDecisionList", organisationId),
+    getConfig<string[]>("tender.intentList", organisationId),
+    getConfig<string>("tender.numberPrefix", organisationId),
+    getConfig<number>("tender.numberPadding", organisationId),
+  ]);
+  return {
+    statusList,
+    outcomeList,
+    winProbWeights,
+    statusWeights,
+    valueBands,
+    clientStatusList,
+    bidDecisionList,
+    intentList,
+    numberPrefix,
+    numberPadding,
+  };
 }
 
 /** Resolves a value into its band label using the lowest threshold the value doesn't exceed. */
