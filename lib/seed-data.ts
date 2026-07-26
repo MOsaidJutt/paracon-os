@@ -756,6 +756,52 @@ export const CONFIG_DEFAULTS = [
     valueJson: 60,
   },
 
+  // ─── Simplified dashboard ────────────────────────────────────────────────────
+
+  {
+    key: "dashboard.simple.revenueTargetAud",
+    group: "dashboard",
+    type: "NUMBER" as const,
+    label: "Revenue target (AUD)",
+    description:
+      "The annual revenue target the 'Revenue won' ring measures against on the simplified dashboard. Revenue won is the winning bid value of every tender marked Won.",
+    valueJson: 5_000_000,
+  },
+  {
+    key: "dashboard.simple.kpiGoodThreshold",
+    group: "dashboard",
+    type: "NUMBER" as const,
+    label: "Simplified dashboard — good threshold (%)",
+    description:
+      "A KPI ring or bar at or above this percentage renders RAG-green. Applies to every percentage KPI on the simplified dashboard.",
+    valueJson: 80,
+  },
+  {
+    key: "dashboard.simple.kpiWarningThreshold",
+    group: "dashboard",
+    type: "NUMBER" as const,
+    label: "Simplified dashboard — warning threshold (%)",
+    description:
+      "A KPI at or above this percentage (but below the good threshold) renders RAG-amber; below it renders RAG-red.",
+    valueJson: 50,
+  },
+  {
+    key: "dashboard.checklist.items",
+    group: "dashboard",
+    type: "CHECKLIST" as const,
+    label: "KPI checklist items",
+    description:
+      "The daily and weekly checks shown on the simplified dashboard. Each user ticks their own copy; a daily tick clears overnight and a weekly tick clears when the ISO week turns over.",
+    valueJson: [
+      { key: "review-site-updates", label: "Review yesterday's site updates", cadence: "DAILY" },
+      { key: "check-deliveries", label: "Check today's deliveries", cadence: "DAILY" },
+      { key: "approve-variations", label: "Approve outstanding variations", cadence: "DAILY" },
+      { key: "labour-forecast", label: "Review the labour forecast", cadence: "WEEKLY" },
+      { key: "pipeline-review", label: "Review the tender pipeline", cadence: "WEEKLY" },
+      { key: "compliance-expiry", label: "Check expiring compliance", cadence: "WEEKLY" },
+    ],
+  },
+
   // ─── Automation ──────────────────────────────────────────────────────────────
 
   {

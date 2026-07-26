@@ -72,6 +72,8 @@ model Organisation {
   delayRecords          DelayRecord[]
   baselines             Baseline[]
   dashboardLayouts      DashboardLayout[]
+  userPreferences       UserPreference[]
+  checklistTicks        KpiChecklistTick[]
 }
 
 // ─── Documents & Templates engine ────────────────────────────────────────────
@@ -204,9 +206,50 @@ model User {
   baselinesSaved                  Baseline[]
   dashboardLayouts                DashboardLayout[]
   googleDriveConnectionsConnected GoogleDriveConnection[]
+  preferences                     UserPreference[]
+  checklistTicks                  KpiChecklistTick[]
 
   @@unique([organisationId, email])
   @@index([roleId])
+}
+
+/// Arbitrary per-user preference, keyed by a short slug. Holds the
+/// Simplified/Full view mode ("view.mode") and the simplified dashboard's
+/// chosen KPI ring slots ("dashboard.simple.rings"). Deliberately generic —
+/// a new per-user preference is a new key, not a new column. Distinct from
+/// DashboardLayout, which owns widget order/visibility only.
+model UserPreference {
+  id             String       @id @default(cuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key            String
+  valueJson      Json
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organisationId, userId, key])
+  @@index([organisationId])
+}
+
+/// One row per (user, checklist item, period) the user has ticked. The items
+/// themselves are config, not code — they live in the "dashboard.checklist.items"
+/// Config row and are editable from the admin settings registry, so adding a
+/// daily/weekly check never needs a migration. `periodKey` is the tick's
+/// bucket: "2026-07-25" for a DAILY item, "2026-W30" for a WEEKLY one, so a
+/// tick naturally lapses when the period rolls over.
+model KpiChecklistTick {
+  id             String       @id @default(cuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemKey        String
+  periodKey      String
+  tickedAt       DateTime     @default(now())
+
+  @@unique([organisationId, userId, itemKey, periodKey])
+  @@index([organisationId, userId, periodKey])
 }
 
 /// Per-user, per-dashboard widget order/visibility — the Xero-style "edit
@@ -363,6 +406,10 @@ enum ConfigType {
   BANDS
   TEXT
   METRICS
+  // A list of {key, label, cadence} rows — the simplified dashboard's
+  // daily/weekly KPI checklist. Admin-editable so adding a check is a settings
+  // change, never a migration.
+  CHECKLIST
 }
 
 model Config {

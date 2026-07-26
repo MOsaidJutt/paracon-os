@@ -5,7 +5,7 @@ import { BadRequestError } from "./errors";
 export type ConfigEntry = {
   key: string;
   group: string;
-  type: "LIST" | "NUMBER" | "WEIGHTS" | "BANDS" | "TEXT" | "METRICS";
+  type: "LIST" | "NUMBER" | "WEIGHTS" | "BANDS" | "TEXT" | "METRICS" | "CHECKLIST";
   label: string;
   description: string;
   value: unknown;

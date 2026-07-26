@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Plus, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,16 +12,28 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type MetricEntry = { key: string; label: string; weight: number; scaleMax: number; source: "AUTO" | "MANUAL" };
+type ChecklistEntry = { key: string; label: string; cadence: "DAILY" | "WEEKLY" };
 
 type ConfigEntry = {
   key: string;
   group: string;
-  type: "LIST" | "NUMBER" | "WEIGHTS" | "BANDS" | "TEXT" | "METRICS";
+  type: "LIST" | "NUMBER" | "WEIGHTS" | "BANDS" | "TEXT" | "METRICS" | "CHECKLIST";
   label: string;
   description: string;
   value: unknown;
   isOverridden: boolean;
 };
+
+/** Stable storage key for a new checklist row, derived from its label so a tick keeps matching if the label is later reworded. */
+function slugifyChecklistKey(label: string): string {
+  return (
+    label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 60) || `item-${Date.now()}`
+  );
+}
 
 function ConfigCard({
   entry,
@@ -197,8 +210,82 @@ function ConfigCard({
           </div>
         )}
 
+        {/* Unlike METRICS, rows here are add/removable: a checklist is meant to
+            be edited by the people who use it, and `key` is derived from the
+            label rather than typed, so nobody has to think about storage keys. */}
+        {entry.type === "CHECKLIST" && (
+          <div className="flex flex-col gap-2">
+            {(draft as ChecklistEntry[]).map((item, i) => (
+              <div key={item.key} className="grid grid-cols-[1fr_8rem_auto] items-center gap-2">
+                <Input
+                  value={item.label}
+                  aria-label="Checklist item"
+                  onChange={(e) =>
+                    setDraft((current: ChecklistEntry[]) =>
+                      current.map((c, idx) => (idx === i ? { ...c, label: e.target.value } : c))
+                    )
+                  }
+                />
+                <Select
+                  value={item.cadence}
+                  onValueChange={(value) =>
+                    setDraft((current: ChecklistEntry[]) =>
+                      current.map((c, idx) => (idx === i ? { ...c, cadence: value as ChecklistEntry["cadence"] } : c))
+                    )
+                  }
+                >
+                  <SelectTrigger aria-label="Cadence">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="DAILY">Daily</SelectItem>
+                    <SelectItem value="WEEKLY">Weekly</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Remove ${item.label || "item"}`}
+                  onClick={() => setDraft((current: ChecklistEntry[]) => current.filter((_, idx) => idx !== i))}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              className="self-start"
+              onClick={() =>
+                setDraft((current: ChecklistEntry[]) => [
+                  ...current,
+                  { key: `item-${Date.now()}`, label: "", cadence: "DAILY" as const },
+                ])
+              }
+            >
+              <Plus className="size-4" /> Add item
+            </Button>
+          </div>
+        )}
+
         <div className="flex items-center gap-2">
-          <Button size="sm" disabled={save.isPending} onClick={() => save.mutate(draft)}>
+          <Button
+            size="sm"
+            disabled={save.isPending}
+            onClick={() =>
+              save.mutate(
+                entry.type === "CHECKLIST"
+                  ? (draft as ChecklistEntry[])
+                      .filter((item) => item.label.trim().length > 0)
+                      .map((item) => ({
+                        ...item,
+                        label: item.label.trim(),
+                        key: item.key.startsWith("item-") ? slugifyChecklistKey(item.label) : item.key,
+                      }))
+                  : draft
+              )
+            }
+          >
             {save.isPending ? "Saving..." : "Save"}
           </Button>
           {allowReset && entry.isOverridden && (

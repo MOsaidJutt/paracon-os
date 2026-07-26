@@ -53,3 +53,7 @@ next-env.d.ts
 # whatever demo/test data has accumulated; never commit a live database file.
 /prisma/dev.db
 /prisma/dev.db-journal
+
+# playwright run logs written by the e2e helper scripts
+/e2e-*.log
+/dev-server.log
