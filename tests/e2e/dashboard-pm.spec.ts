@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { useFullView } from "./helpers/view-mode";
 
 // Requires the database to be seeded (npm run db:seed) and the dev server running.
 // Both seeded demo projects are assigned to pm@paracon.com.au (see prisma/seed.ts).
@@ -11,6 +12,7 @@ test("PM sees only their own projects' look-ahead, labour, deliveries and issues
   await page.getByLabel("Password").fill("Demo1234!");
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("/dashboard");
+  await useFullView(page);
 
   await expect(page.getByRole("heading", { name: "PM Dashboard" })).toBeVisible();
   await expect(page.getByText("My projects")).toBeVisible({ timeout: 30_000 });

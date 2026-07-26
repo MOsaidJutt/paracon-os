@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { resetDashboardLayout, useFullView } from "./helpers/view-mode";
 
 // Requires the database to be seeded (npm run db:seed) and the dev server running.
 // Covers the Xero-style "edit dashboard" ask: a user can hide/show dashboard
@@ -7,12 +8,14 @@ import { test, expect } from "@playwright/test";
 // so it doesn't leave director@paracon.com.au's layout in a state that would
 // break the other dashboard specs sharing that account.
 test("hiding a widget in customize mode persists across reload, and can be shown again", async ({ page }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(150_000);
   await page.goto("/login");
   await page.getByLabel("Email").fill("director@paracon.com.au");
   await page.getByLabel("Password").fill("Demo1234!");
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("/dashboard");
+  await useFullView(page);
+  await resetDashboardLayout(page, "director");
 
   await expect(page.getByRole("button", { name: "Customize" })).toBeVisible({ timeout: 30_000 });
 
@@ -22,7 +25,9 @@ test("hiding a widget in customize mode persists across reload, and can be shown
   await expect(alertsWidget).toBeVisible();
   await alertsWidget.getByRole("button", { name: "Hide widget" }).click();
   await page.getByRole("button", { name: "Done" }).click();
-  await expect(page.getByRole("button", { name: "Customize" })).toBeVisible({ timeout: 15_000 });
+  // "Done" now awaits the layout write; wait for edit mode to end before
+  // reloading, or the request is cancelled mid-flight.
+  await expect(page.getByRole("button", { name: "Customize" })).toBeVisible({ timeout: 20_000 });
 
   // The hide persisted server-side — a fresh page load doesn't render it.
   await page.reload();
@@ -35,6 +40,9 @@ test("hiding a widget in customize mode persists across reload, and can be shown
   await expect(hiddenAlertsWidget).toBeVisible();
   await hiddenAlertsWidget.getByRole("button", { name: "Show widget" }).click();
   await page.getByRole("button", { name: "Done" }).click();
+  // "Done" now awaits the layout write; wait for edit mode to end before
+  // reloading, or the request is cancelled mid-flight.
+  await expect(page.getByRole("button", { name: "Customize" })).toBeVisible({ timeout: 20_000 });
 
   await page.reload();
   await expect(page.locator('[data-widget-id="alerts"]')).toBeVisible({ timeout: 30_000 });
@@ -48,12 +56,14 @@ test("hiding a widget in customize mode persists across reload, and can be shown
 // dnd-kit's own screen-reader live-region announcement ("Draggable item ...
 // was picked up"), which is the same mechanism a screen-reader user relies on.
 test("a widget's drag handle is keyboard-operable while customizing", async ({ page }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(150_000);
   await page.goto("/login");
   await page.getByLabel("Email").fill("director@paracon.com.au");
   await page.getByLabel("Password").fill("Demo1234!");
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("/dashboard");
+  await useFullView(page);
+  await resetDashboardLayout(page, "director");
 
   await expect(page.getByRole("button", { name: "Customize" })).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Customize" }).click();
@@ -67,4 +77,7 @@ test("a widget's drag handle is keyboard-operable while customizing", async ({ p
   await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "Done" }).click();
+  // "Done" now awaits the layout write; wait for edit mode to end before
+  // reloading, or the request is cancelled mid-flight.
+  await expect(page.getByRole("button", { name: "Customize" })).toBeVisible({ timeout: 20_000 });
 });

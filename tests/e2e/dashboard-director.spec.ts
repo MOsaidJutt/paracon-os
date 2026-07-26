@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { useFullView } from "./helpers/view-mode";
 
 // Requires the database to be seeded (npm run db:seed) and the dev server running.
 // The Director dashboard composes several queries server-side (project health,
@@ -11,6 +12,7 @@ test("director sees the Command Centre with health, critical dates, capacity, pi
   await page.getByLabel("Password").fill("Demo1234!");
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("/dashboard");
+  await useFullView(page);
 
   await expect(page.getByRole("heading", { name: "Command Centre" })).toBeVisible();
   await expect(page.getByText("At-risk projects")).toBeVisible({ timeout: 30_000 });
@@ -44,6 +46,7 @@ test("the capacity widget expands the forecast breakdown inline, without leaving
   await page.getByLabel("Password").fill("Demo1234!");
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("/dashboard");
+  await useFullView(page);
 
   await expect(page.getByText("Can we take on more work?")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Demand vs supply by trade")).not.toBeVisible();
@@ -66,6 +69,7 @@ test("hovering an at-risk project reveals its reasons without navigating away", 
   await page.getByLabel("Password").fill("Demo1234!");
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("/dashboard");
+  await useFullView(page);
 
   await expect(page.getByText("At-risk projects")).toBeVisible({ timeout: 30_000 });
   // At-risk reasons are revealed on hover, not shown inline by default.
