@@ -1,12 +1,15 @@
 import Image from "next/image";
 import { SidebarNav } from "./sidebar-nav";
+import type { ViewMode } from "@/lib/view-mode";
 
 export function Sidebar({
   permissions,
   superAdminEnabled,
+  viewMode,
 }: {
   permissions: string[];
   superAdminEnabled: boolean;
+  viewMode: ViewMode;
 }) {
   return (
     <aside className="hidden w-64 flex-col bg-ink lg:flex">
@@ -20,7 +23,7 @@ export function Sidebar({
           priority
         />
       </div>
-      <SidebarNav permissions={permissions} superAdminEnabled={superAdminEnabled} />
+      <SidebarNav permissions={permissions} superAdminEnabled={superAdminEnabled} viewMode={viewMode} />
       <div className="px-5 py-4 text-xs leading-relaxed text-paper/55">
         One Team. One Standard. One Process. One Source of Truth.
       </div>

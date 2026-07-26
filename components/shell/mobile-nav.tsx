@@ -6,13 +6,17 @@ import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { SidebarNav } from "./sidebar-nav";
+import { ViewModeToggle } from "./view-mode-toggle";
+import type { ViewMode } from "@/lib/view-mode";
 
 export function MobileNav({
   permissions,
   superAdminEnabled,
+  viewMode,
 }: {
   permissions: string[];
   superAdminEnabled: boolean;
+  viewMode: ViewMode;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -38,8 +42,14 @@ export function MobileNav({
             className="h-6 w-auto"
           />
         </div>
+        {/* The topbar hides the view switch below sm to keep it off the logo,
+            so this is a phone user's way to it. Outside the close-on-click
+            wrapper below: switching view should show the new nav, not dismiss it. */}
+        <div className="px-3 pb-1 pt-2">
+          <ViewModeToggle viewMode={viewMode} />
+        </div>
         <div onClick={() => setOpen(false)}>
-          <SidebarNav permissions={permissions} superAdminEnabled={superAdminEnabled} />
+          <SidebarNav permissions={permissions} superAdminEnabled={superAdminEnabled} viewMode={viewMode} />
         </div>
       </SheetContent>
     </Sheet>
