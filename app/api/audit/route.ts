@@ -8,6 +8,7 @@ import { BadRequestError } from "@/lib/errors";
 // can see its change history; this is a convenience view, not a separate
 // privilege (the searchable central log at /admin/audit stays admin-gated).
 const VIEW_PERMISSIONS_BY_ENTITY: Record<string, string[]> = {
+  Prospect: ["prospect.view"],
   Project: ["project.view"],
   ProgramActivity: ["project.view"],
   Worker: ["labour.view"],

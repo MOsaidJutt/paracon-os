@@ -588,6 +588,15 @@ model Prospect {
   address           String?
   estimatedValue    Float?
   stage             String       @default("Cold")
+  // The three fields the vision doc's CRM list called for that the original
+  // Prospect model didn't carry (INTAKE_NOTES §2: Company, Contact,
+  // Opportunity, Probability, Next Action). Probability is a whole percent
+  // rather than a 0-1 fraction because it is typed by a person, not computed —
+  // "40" is what an estimator writes down. nextAction is what turns this from a
+  // list of leads into something that chases them.
+  probability       Int?
+  nextAction        String?
+  nextActionDate    DateTime?
   notes             String?
   convertedTenderId String?      @unique
   convertedTender   Tender?      @relation(fields: [convertedTenderId], references: [id])
@@ -596,6 +605,7 @@ model Prospect {
 
   @@index([organisationId])
   @@index([organisationId, stage])
+  @@index([organisationId, nextActionDate])
 }
 
 // ─── Projects & Construction Program ─────────────────────────────────────────

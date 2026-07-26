@@ -31,6 +31,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         address: body.address,
         estimatedValue: body.estimatedValue,
         stage: body.stage,
+        probability: body.probability,
+        nextAction: body.nextAction,
+        nextActionDate: body.nextActionDate,
         notes: body.notes,
       },
     });
@@ -41,8 +44,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       action: "prospect.update",
       entityType: "Prospect",
       entityId: prospect.id,
-      before: { stage: existing.stage },
-      after: { stage: prospect.stage },
+      // Enough to make the inline activity trail readable: what moved, and
+      // what the next action became.
+      before: { stage: existing.stage, probability: existing.probability, nextAction: existing.nextAction },
+      after: { stage: prospect.stage, probability: prospect.probability, nextAction: prospect.nextAction },
     });
 
     return NextResponse.json({ prospect });

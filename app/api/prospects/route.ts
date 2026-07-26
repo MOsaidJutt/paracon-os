@@ -11,7 +11,10 @@ export async function GET() {
     const session = await requirePermission("prospect.view");
     const db = getTenantContext(session.user.organisationId);
 
-    const prospects = await db.prospect.findMany({ orderBy: { createdAt: "desc" } });
+    const prospects = await db.prospect.findMany({
+      orderBy: { createdAt: "desc" },
+      include: { convertedTender: { select: { id: true, projectName: true } } },
+    });
 
     return NextResponse.json({ prospects });
   } catch (error) {
@@ -38,6 +41,9 @@ export async function POST(req: NextRequest) {
         address: body.address,
         estimatedValue: body.estimatedValue,
         stage: body.stage,
+        probability: body.probability,
+        nextAction: body.nextAction,
+        nextActionDate: body.nextActionDate,
         notes: body.notes,
       },
     });
