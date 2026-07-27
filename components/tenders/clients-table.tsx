@@ -15,9 +15,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ClientFormDialog, type ClientRow } from "./client-form-dialog";
 
-type ApiClientRow = ClientRow & { _count: { tenders: number } };
+export type ApiClientRow = ClientRow & { _count: { tenders: number } };
 
-export function ClientsTable() {
+export function ClientsTable({ onRowClick }: { onRowClick?: (client: ApiClientRow) => void } = {}) {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<ClientRow | null>(null);
@@ -82,14 +82,18 @@ export function ClientsTable() {
               </TableRow>
             )}
             {data?.clients.map((client) => (
-              <TableRow key={client.id}>
+              <TableRow
+                key={client.id}
+                className={onRowClick ? "cursor-pointer" : undefined}
+                onClick={() => onRowClick?.(client)}
+              >
                 <TableCell className="font-medium text-foreground">{client.name}</TableCell>
                 <TableCell>
                   <Badge variant={client.status === "Pause" ? "secondary" : "default"}>{client.status}</Badge>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{client.contacts.length}</TableCell>
                 <TableCell className="text-muted-foreground">{client._count.tenders}</TableCell>
-                <TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="size-8" aria-label={`Actions for ${client.name}`}>

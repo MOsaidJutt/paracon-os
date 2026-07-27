@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SupplierFormDialog, type SupplierRow } from "./supplier-form-dialog";
 
-export function SuppliersTable() {
+export function SuppliersTable({ onRowClick }: { onRowClick?: (supplier: SupplierRow) => void } = {}) {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<SupplierRow | null>(null);
@@ -95,7 +95,11 @@ export function SuppliersTable() {
               </TableRow>
             )}
             {suppliers.map((supplier) => (
-              <TableRow key={supplier.id}>
+              <TableRow
+                key={supplier.id}
+                className={onRowClick ? "cursor-pointer" : undefined}
+                onClick={() => onRowClick?.(supplier)}
+              >
                 <TableCell>
                   <Badge variant={supplier.kind === "Subcontractor" ? "default" : "secondary"}>{supplier.kind}</Badge>
                 </TableCell>
@@ -104,7 +108,7 @@ export function SuppliersTable() {
                 <TableCell className="text-muted-foreground">{supplier.contact ?? "—"}</TableCell>
                 <TableCell className="text-muted-foreground">{supplier.email ?? "—"}</TableCell>
                 <TableCell className="text-muted-foreground">{supplier.phone ?? "—"}</TableCell>
-                <TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="size-8" aria-label={`Actions for ${supplier.company}`}>
